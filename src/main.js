@@ -3,7 +3,7 @@ import { state, navigate, register, loadSession, MEMBERS_BY_CITY } from './utils
 import { supabase } from './lib/supabase.js';
 
 // Screens
-import { renderLanding, renderSignup, renderSignupBlocked, renderInterests, renderLogin, initAuthHandlers } from './screens/auth.js';
+import { renderLanding, renderSignup, renderSignupBlocked, renderInterests, renderLogin, renderCompleteProfile, initAuthHandlers } from './screens/auth.js';
 import { renderDashboard, renderExplore, renderNotifications, initDashboardHandlers } from './screens/dashboard.js';
 import { renderCreateCommunity, initCreateCommunityHandlers } from './screens/create-community.js';
 import { renderCommunity, initCommunityHandlers } from './screens/community.js';
@@ -18,6 +18,7 @@ register('signup',                renderSignup);
 register('signup-blocked',        renderSignupBlocked);
 register('interests',             renderInterests);
 register('login',                 renderLogin);
+register('complete-profile',      renderCompleteProfile);
 register('dashboard',             renderDashboard);
 register('explore',               renderExplore);
 register('create-community',      renderCreateCommunity);
@@ -73,7 +74,9 @@ if (isAdmin) {
 } else {
   // Check for existing session before showing landing
   loadSession(supabase).then(user => {
-    if (user) {
+    if (user === 'needs-profile') {
+      navigate('complete-profile');
+    } else if (user) {
       navigate('dashboard');
     } else {
       navigate('landing');

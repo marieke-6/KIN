@@ -230,6 +230,59 @@ export function renderInterests() {
   </main>`;
 }
 
+// ── Complete profile (existing auth account, no profile row) ──
+export function renderCompleteProfile() {
+  return `
+  <main>
+    <nav class="nav"><span class="nav-logo">Kin</span></nav>
+    <div class="screen-body">
+      <h2 style="margin-bottom:4px;">Almost there</h2>
+      <p class="text-muted text-small mb-lg">Complete your profile to get started.</p>
+
+      <div id="complete-profile-error" class="card-danger mb-lg" style="display:none;">
+        <p id="complete-profile-error-msg" style="font-size:13px;color:var(--red-dark);"></p>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="cp-name">First name</label>
+        <input type="text" id="cp-name" placeholder="e.g. Anna" autocomplete="given-name" />
+      </div>
+      <div class="field">
+        <label class="field-label" for="cp-city">Your city</label>
+        <input type="text" id="cp-city" placeholder="e.g. Vienna" />
+      </div>
+      <div class="field">
+        <label class="field-label">Account type</label>
+        <div style="display:flex;gap:8px;">
+          <button type="button" id="cp-type-individual" class="btn btn-primary btn-sm"
+                  onclick="window.kinCpSetType('individual')" style="flex:1;">Individual</button>
+          <button type="button" id="cp-type-business" class="btn btn-sm"
+                  onclick="window.kinCpSetType('business')" style="flex:1;">Business</button>
+        </div>
+      </div>
+      <div id="cp-business-fields" style="display:none;">
+        <div class="field">
+          <label class="field-label" for="cp-biz-name">Business name</label>
+          <input type="text" id="cp-biz-name" placeholder="e.g. Café Lotte" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="cp-biz-type">Type of business</label>
+          <select id="cp-biz-type">
+            <option value="">Select…</option>
+            <option>Café / Bar</option><option>Restaurant</option>
+            <option>Gym / Fitness studio</option><option>Sports club</option>
+            <option>Cultural venue</option><option>Other</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-full btn-lg" id="cp-btn"
+              onclick="window.kinSubmitCompleteProfile()">
+        Continue <i class="ti ti-arrow-right" aria-hidden="true"></i>
+      </button>
+    </div>
+  </main>`;
+}
+
 // ── Login ──
 export function renderLogin() {
   return `
@@ -271,6 +324,61 @@ export function renderLogin() {
 export function initAuthHandlers() {
   // Track selected account type
   window.__accountType = 'individual';
+  window.__cpAccountType = 'individual';
+
+  window.kinCpSetType = (type) => {
+    window.__cpAccountType = type;
+    const isBiz = type === 'business';
+    const indBtn = document.getElementById('cp-type-individual');
+    const bizBtn = document.getElementById('cp-type-business');
+    const fields = document.getElementById('cp-business-fields');
+    if (indBtn) { indBtn.className = isBiz ? 'btn btn-sm' : 'btn btn-primary btn-sm'; indBtn.style.flex = '1'; }
+    if (bizBtn) { bizBtn.className = isBiz ? 'btn btn-primary btn-sm' : 'btn btn-sm'; bizBtn.style.flex = '1'; }
+    if (fields) fields.style.display = isBiz ? 'block' : 'none';
+  };
+
+  window.kinSubmitCompleteProfile = async () => {
+    const name  = document.getElementById('cp-name')?.value.trim();
+    const city  = document.getElementById('cp-city')?.value.trim();
+    const isBusiness   = window.__cpAccountType === 'business';
+    const businessName = document.getElementById('cp-biz-name')?.value.trim() || '';
+    const businessType = document.getElementById('cp-biz-type')?.value || '';
+
+    const errEl  = document.getElementById('complete-profile-error');
+    const errMsg = document.getElementById('complete-profile-error-msg');
+    const showErr = (msg) => { if (errEl && errMsg) { errMsg.textContent = msg; errEl.style.display = 'block'; } };
+
+    if (!name) { showErr('Please enter your first name.'); return; }
+    if (!city) { showErr('Please enter your city.'); return; }
+
+    const btn = document.getElementById('cp-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) { navigate('login'); return; }
+
+    const colors = ['sage', 'lav', 'peach', 'amber'];
+    const avatarColor = colors[Math.floor(Math.random() * colors.length)];
+
+    const { error } = await supabase.from('profiles').insert({
+      id: session.user.id, name, city, avatar_color: avatarColor,
+      interests: [], is_business: isBusiness,
+      business_name: businessName, business_type: businessType,
+    });
+
+    if (error) {
+      showErr(error.message);
+      if (btn) { btn.disabled = false; btn.textContent = 'Continue'; }
+      return;
+    }
+
+    state.user = {
+      id: session.user.id, name, city, interests: [],
+      initials: name[0].toUpperCase(), avatarColor,
+      isBusiness, businessName, businessType,
+    };
+    navigate('interests');
+  };
 
   window.kinSetAccountType = (type) => {
     window.__accountType = type;

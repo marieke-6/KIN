@@ -272,9 +272,8 @@ export async function loadSession(supabase) {
     .maybeSingle();
 
   if (!profile) {
-    // Session exists but no profile — sign out and start fresh
-    await supabase.auth.signOut();
-    return null;
+    // Session exists but no profile — let main.js send them to complete-profile
+    return 'needs-profile';
   }
 
   state.user = {
