@@ -19,7 +19,7 @@ export function renderCommunity(params = {}) {
           <p class="fw-500" style="font-size:15px;">Loading…</p>
         </div>
       </div>
-      <span class="pill pill-sage text-tiny"><i class="ti ti-check" aria-hidden="true"></i> Joined</span>
+      <div id="comm-join-btn-wrap"></div>
     </nav>
 
     <div id="comm-city-bar" style="padding:10px 16px;background:var(--bg);border-bottom:0.5px solid var(--border);display:none;">
@@ -78,12 +78,15 @@ async function initCommunityScreen(commId) {
 
   // Update nav
   const navInfo = document.getElementById('comm-nav-info');
+  // Extract type from description (stored as "Type · Notes")
+  const commType = comm.description ? comm.description.split(' · ')[0] : '';
+
   if (navInfo) {
     navInfo.innerHTML = `
       ${commIcon(comm.icon, comm.color, 'sm')}
       <div>
         <p class="fw-500" style="font-size:15px;">${escapeHtml(comm.name)}</p>
-        <p class="text-tiny text-muted" id="comm-member-count">…</p>
+        <p class="text-tiny text-muted" id="comm-member-count">${commType ? escapeHtml(commType) + ' · ' : ''}…</p>
       </div>`;
   }
 
@@ -104,14 +107,62 @@ async function initCommunityScreen(commId) {
     }
   }
 
-  // Load member count
-  const { count } = await supabase
-    .from('community_members')
-    .select('*', { count: 'exact', head: true })
-    .eq('community_id', commId);
+  // Check membership + member count in parallel
+  const [{ count }, membershipRow] = await Promise.all([
+    supabase
+      .from('community_members')
+      .select('*', { count: 'exact', head: true })
+      .eq('community_id', commId),
+    state.user
+      ? supabase
+          .from('community_members')
+          .select('id')
+          .eq('community_id', commId)
+          .eq('user_id', state.user.id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const isMember = !!membershipRow.data;
+  const isCreator = comm.created_by === state.user?.id;
+  const isSeeded  = !!COMMUNITIES[commId];
 
   const countEl = document.getElementById('comm-member-count');
   if (countEl) countEl.textContent = `${count ?? 0} members`;
+
+  // Render join/leave button in nav
+  const btnWrap = document.getElementById('comm-join-btn-wrap');
+  if (btnWrap) {
+    if (isMember || isSeeded) {
+      btnWrap.innerHTML = `<span class="pill pill-sage text-tiny">
+        <i class="ti ti-check" aria-hidden="true"></i> Joined
+      </span>
+      ${!isCreator && !isSeeded ? `
+        <button class="btn btn-sm" style="margin-left:6px;font-size:12px;color:var(--muted);"
+                onclick="window.kinLeaveCommunity('${commId}')">Leave</button>` : ''}`;
+    } else {
+      btnWrap.innerHTML = `
+        <button class="btn btn-primary btn-sm" id="join-comm-btn"
+                onclick="window.kinJoinCommunityFromScreen('${commId}')">
+          Join
+        </button>`;
+    }
+  }
+
+  // Show chat input only for members; otherwise show a join prompt
+  const chatInput = document.querySelector('.chat-input-row');
+  if (chatInput) {
+    if (!isMember && !isSeeded) {
+      chatInput.innerHTML = `
+        <div style="flex:1;padding:12px 16px;text-align:center;">
+          <p class="text-muted text-small" style="margin-bottom:10px;">Join this community to chat and see events.</p>
+          <button class="btn btn-primary btn-full"
+                  onclick="window.kinJoinCommunityFromScreen('${commId}')">
+            Join community
+          </button>
+        </div>`;
+    }
+  }
 
   // Load chat messages
   await loadCommunityMessages(commId, selectedCity);
@@ -307,6 +358,32 @@ export function renderMemberRows(members) {
 }
 
 export function initCommunityHandlers() {
+  window.kinJoinCommunityFromScreen = async (commId) => {
+    if (!state.user) { navigate('login'); return; }
+    const btn = document.getElementById('join-comm-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Joining…'; }
+
+    await supabase.from('community_members').insert({
+      community_id: commId,
+      user_id: state.user.id,
+    });
+
+    // Reload the screen to reflect membership
+    navigate('community', { id: commId });
+  };
+
+  window.kinLeaveCommunity = async (commId) => {
+    if (!state.user) return;
+    const confirmed = window.confirm('Leave this community? You can always rejoin later.');
+    if (!confirmed) return;
+
+    await supabase.from('community_members').delete()
+      .eq('community_id', commId)
+      .eq('user_id', state.user.id);
+
+    navigate('explore');
+  };
+
   window.kinSetCommunityCity = (commId, city) => {
     state.communityCity = city;
     state.communityTab = state.communityTab || 'chat';
