@@ -300,7 +300,12 @@ export function navigate(screenId, params = {}) {
   if (!app) return;
   const fn = routes[screenId];
   if (!fn) { console.warn(`No route for: ${screenId}`); return; }
-  app.innerHTML = fn(params);
+  try {
+    app.innerHTML = fn(params);
+  } catch (err) {
+    console.error(`[navigate] render error for screen "${screenId}":`, err);
+    app.innerHTML = `<main><div style="padding:24px 16px;"><p class="text-muted">Something went wrong loading this screen.</p><button class="btn btn-primary" onclick="window.kinNavigate('dashboard')" style="margin-top:12px;">Back to home</button></div></main>`;
+  }
   window.scrollTo(0, 0);
   document.querySelectorAll('.bnav-item').forEach(b => {
     b.classList.toggle('active', b.dataset.screen === screenId);

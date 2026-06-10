@@ -267,7 +267,8 @@ export function renderPastEvent(params = {}) {
 }
 
 export function renderCreateEvent(params = {}) {
-  const commId = typeof params === 'string' ? params : params.id || 'board-games';
+  const commId = typeof params === 'string' ? params : (params.id || 'board-games');
+  console.log('[renderCreateEvent] commId:', commId, 'user logged in:', !!state.user);
   return `
   <main>
     <nav class="nav">
