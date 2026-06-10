@@ -1,13 +1,13 @@
 // ─── Event Detail & Private Chat Screen ───
 import { state, navigate } from '../utils/state.js';
-import { avatar, escapeHtml, capacityBar, eventDateBlock } from '../utils/helpers.js';
+import { avatar, escapeHtml, capacityBar, eventDateBlock, businessBadge } from '../utils/helpers.js';
 import { supabase } from '../lib/supabase.js';
 
 // ── Fetch a single event from Supabase ──
 async function fetchEvent(id) {
   const { data, error } = await supabase
     .from('events')
-    .select(`*, rsvps(count), profiles!events_created_by_fkey(name)`)
+    .select(`*, rsvps(count), profiles!events_created_by_fkey(name, is_business, business_type)`)
     .eq('id', id)
     .single();
   if (error) return null;
@@ -105,6 +105,12 @@ function renderLockedEventBody(ev, going) {
         <i class="ti ti-users" aria-hidden="true" style="font-size:15px;color:var(--muted);"></i>
         <span style="font-size:13px;">${going} of ${ev.max_attendees} spots taken</span>
       </div>
+      ${ev.profiles ? `
+      <div style="display:flex;align-items:center;gap:8px;">
+        <i class="ti ti-user" aria-hidden="true" style="font-size:15px;color:var(--muted);"></i>
+        <span style="font-size:13px;">Hosted by ${escapeHtml(ev.profiles.name || 'organiser')}</span>
+        ${businessBadge(ev.profiles.is_business, ev.profiles.business_type)}
+      </div>` : ''}
     </div>
     <div style="margin-top:14px;padding-top:12px;border-top:0.5px solid var(--border);">
       <div style="display:flex;align-items:center;gap:7px;margin-bottom:10px;">

@@ -113,6 +113,19 @@ export function toggleSwitch(btn) {
 }
 
 /**
+ * Returns a business badge pill for a profile
+ * @param {boolean} isBusiness
+ * @param {string}  businessType  e.g. "Café"
+ */
+export function businessBadge(isBusiness, businessType = '') {
+  if (!isBusiness) return '';
+  const label = businessType ? businessType : 'Business';
+  return `<span class="pill pill-lav text-tiny" style="white-space:nowrap;">
+            <i class="ti ti-building-store" aria-hidden="true" style="font-size:10px;"></i> ${escapeHtml(label)}
+          </span>`;
+}
+
+/**
  * Escapes HTML to prevent XSS
  */
 export function escapeHtml(str) {

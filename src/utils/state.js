@@ -268,12 +268,15 @@ export async function loadSession(supabase) {
   if (!profile) return null;
 
   state.user = {
-    id:          session.user.id,
-    name:        profile.name,
-    city:        profile.city,
-    interests:   profile.interests || [],
-    initials:    profile.name[0].toUpperCase(),
-    avatarColor: profile.avatar_color || 'sage',
+    id:           session.user.id,
+    name:         profile.name,
+    city:         profile.city,
+    interests:    profile.interests || [],
+    initials:     profile.name[0].toUpperCase(),
+    avatarColor:  profile.avatar_color || 'sage',
+    isBusiness:   profile.is_business   || false,
+    businessName: profile.business_name || '',
+    businessType: profile.business_type || '',
   };
   return state.user;
 }

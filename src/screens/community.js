@@ -1,6 +1,6 @@
 // ─── Community Hub Screen ───
 import { state, navigate, COMMUNITIES, EVENTS_BY_CITY, MEMBERS_BY_CITY } from '../utils/state.js';
-import { commIcon, eventDateBlock, capacityBar, activityStatus, avatar, escapeHtml } from '../utils/helpers.js';
+import { commIcon, eventDateBlock, capacityBar, activityStatus, avatar, escapeHtml, businessBadge } from '../utils/helpers.js';
 import { supabase } from '../lib/supabase.js';
 
 export function renderCommunity(params = {}) {
@@ -146,7 +146,7 @@ async function loadCommunityMembers(commId) {
 
   const { data: rows } = await supabase
     .from('community_members')
-    .select('user_id, joined_at, profiles(name, avatar_color)')
+    .select('user_id, joined_at, profiles(name, avatar_color, is_business, business_type)')
     .eq('community_id', commId)
     .order('joined_at', { ascending: true })
     .limit(100);
@@ -157,18 +157,21 @@ async function loadCommunityMembers(commId) {
   }
 
   el.innerHTML = rows.map(r => {
-    const name  = r.profiles?.name || 'Member';
-    const color = r.profiles?.avatar_color || 'sage';
-    const init  = name[0].toUpperCase();
-    const isYou = r.user_id === state.user?.id;
-    const joined = new Date(r.joined_at).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' });
+    const name    = r.profiles?.name || 'Member';
+    const color   = r.profiles?.avatar_color || 'sage';
+    const init    = name[0].toUpperCase();
+    const isYou   = r.user_id === state.user?.id;
+    const isBiz   = r.profiles?.is_business || false;
+    const bizType = r.profiles?.business_type || '';
+    const joined  = new Date(r.joined_at).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' });
     return `
     <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--border);">
       ${avatar(init, color, 'sm')}
       <div style="flex:1;">
-        <div style="display:flex;align-items:center;gap:6px;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
           <span class="fw-500" style="font-size:14px;">${escapeHtml(name)}</span>
           ${isYou ? `<span class="new-badge">you</span>` : ''}
+          ${businessBadge(isBiz, bizType)}
         </div>
         <span class="text-tiny text-muted">Joined ${joined}</span>
       </div>
@@ -182,7 +185,7 @@ async function loadCommunityMessages(commId, city) {
 
   const { data: rows, error } = await supabase
     .from('community_messages')
-    .select('id, text, created_at, user_id, profiles(name, avatar_color)')
+    .select('id, text, created_at, user_id, profiles(name, avatar_color, is_business, business_type)')
     .eq('community_id', commId)
     .eq('city', city)
     .order('created_at', { ascending: true })
@@ -196,20 +199,27 @@ async function loadCommunityMessages(commId, city) {
   const currentUserId = state.user?.id;
 
   const msgHtml = (rows || []).map(m => {
-    const isOwn = m.user_id === currentUserId;
-    const name  = m.profiles?.name || 'Member';
-    const color = m.profiles?.avatar_color || 'sage';
-    const init  = name[0].toUpperCase();
+    const isOwn      = m.user_id === currentUserId;
+    const name       = m.profiles?.name || 'Member';
+    const color      = m.profiles?.avatar_color || 'sage';
+    const init       = name[0].toUpperCase();
+    const isBiz      = m.profiles?.is_business || false;
+    const bizType    = m.profiles?.business_type || '';
 
     return isOwn
       ? `<div class="msg msg-out">
-          <div><div class="msg-bubble msg-bubble-out">${escapeHtml(m.text)}</div></div>
+          <div>
+            ${state.user?.isBusiness ? `<div style="text-align:right;margin-bottom:3px;">${businessBadge(true, state.user.businessType)}</div>` : ''}
+            <div class="msg-bubble msg-bubble-out">${escapeHtml(m.text)}</div>
+          </div>
           <div class="avatar avatar-sm avatar-${state.user?.avatarColor || 'sage'}">${state.user?.initials || 'M'}</div>
          </div>`
       : `<div class="msg">
           ${avatar(init, color, 'sm')}
           <div>
-            <div class="msg-name">${escapeHtml(name)}</div>
+            <div class="msg-name" style="display:flex;align-items:center;gap:5px;">
+              ${escapeHtml(name)} ${businessBadge(isBiz, bizType)}
+            </div>
             <div class="msg-bubble msg-bubble-in">${escapeHtml(m.text)}</div>
           </div>
          </div>`;

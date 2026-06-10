@@ -57,7 +57,7 @@ export function renderSignup() {
     </nav>
     <div class="screen-body">
       <h2 style="margin-bottom:4px;">Create your account</h2>
-      <p class="text-muted text-small mb-lg">No photo needed. Just your name and what you love.</p>
+      <p class="text-muted text-small mb-lg">Join as an individual or as a business hosting events.</p>
 
       <div id="auth-error" class="card-danger mb-lg" style="display:none;">
         <div style="display:flex;gap:9px;align-items:flex-start;">
@@ -66,10 +66,54 @@ export function renderSignup() {
         </div>
       </div>
 
-      <div class="field">
-        <label class="field-label" for="signup-name">First name only</label>
-        <input type="text" id="signup-name" placeholder="e.g. Marieke" autocomplete="given-name" />
+      <!-- Account type toggle -->
+      <div style="display:flex;gap:8px;margin-bottom:20px;">
+        <button id="type-individual" onclick="window.kinSetAccountType('individual')"
+          style="flex:1;padding:10px;border-radius:10px;border:2px solid var(--accent);
+                 background:var(--accent-bg);font-size:13px;font-weight:500;cursor:pointer;
+                 display:flex;align-items:center;justify-content:center;gap:6px;">
+          <i class="ti ti-user" aria-hidden="true"></i> Individual
+        </button>
+        <button id="type-business" onclick="window.kinSetAccountType('business')"
+          style="flex:1;padding:10px;border-radius:10px;border:2px solid var(--border);
+                 background:var(--bg);font-size:13px;font-weight:500;cursor:pointer;color:var(--muted);
+                 display:flex;align-items:center;justify-content:center;gap:6px;">
+          <i class="ti ti-building-store" aria-hidden="true"></i> Business
+        </button>
       </div>
+
+      <!-- Individual fields -->
+      <div id="individual-fields">
+        <div class="field">
+          <label class="field-label" for="signup-name">First name only</label>
+          <input type="text" id="signup-name" placeholder="e.g. Marieke" autocomplete="given-name" />
+        </div>
+      </div>
+
+      <!-- Business fields (hidden by default) -->
+      <div id="business-fields" style="display:none;">
+        <div class="field">
+          <label class="field-label" for="signup-business-name">Business name</label>
+          <input type="text" id="signup-business-name" placeholder="e.g. Café Central, CrossFit Vienna" />
+        </div>
+        <div class="field">
+          <label class="field-label" for="signup-business-type">Type of business</label>
+          <select id="signup-business-type">
+            <option value="">Select a type…</option>
+            <option value="Café">Café</option>
+            <option value="Bar">Bar</option>
+            <option value="Restaurant">Restaurant</option>
+            <option value="Gym">Gym</option>
+            <option value="Yoga studio">Yoga studio</option>
+            <option value="Art studio">Art studio</option>
+            <option value="Bookshop">Bookshop</option>
+            <option value="Game café">Game café</option>
+            <option value="Community centre">Community centre</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+      </div>
+
       <div class="field">
         <label class="field-label" for="signup-email">Email</label>
         <input type="email" id="signup-email" placeholder="you@email.com" autocomplete="email" />
@@ -78,7 +122,9 @@ export function renderSignup() {
         <label class="field-label" for="signup-password">Password</label>
         <input type="password" id="signup-password" placeholder="At least 8 characters" autocomplete="new-password" />
       </div>
-      <div class="field">
+
+      <!-- DOB only for individuals -->
+      <div id="dob-field" class="field">
         <label class="field-label" for="signup-dob">Date of birth</label>
         <input type="date" id="signup-dob" onchange="window.kinCheckAge()" />
         <div id="age-error" style="display:none;" class="field-error">
@@ -86,15 +132,16 @@ export function renderSignup() {
           You must be 18 or older to use Kin.
         </div>
       </div>
+
       <div class="field">
-        <label class="field-label" for="signup-city">Your city or town</label>
-        <input type="text" id="signup-city" placeholder="e.g. Vienna, Innsbruck, Graz..." autocomplete="address-level2" />
+        <label class="field-label" for="signup-city">City or town</label>
+        <input type="text" id="signup-city" placeholder="e.g. Vienna, Innsbruck, Graz…" autocomplete="address-level2" />
       </div>
 
       <div class="card-flat mb-lg">
         <p class="fw-500 text-small mb-md">Before you join, please confirm:</p>
         <div style="display:flex;flex-direction:column;gap:10px;">
-          <label class="checkbox-row">
+          <label class="checkbox-row" id="check-age-row">
             <input type="checkbox" id="check-age" />
             I confirm I am 18 years of age or older
           </label>
@@ -222,6 +269,36 @@ export function renderLogin() {
 
 // ── Event handlers ──
 export function initAuthHandlers() {
+  // Track selected account type
+  window.__accountType = 'individual';
+
+  window.kinSetAccountType = (type) => {
+    window.__accountType = type;
+    const isBusiness = type === 'business';
+
+    const indBtn  = document.getElementById('type-individual');
+    const bizBtn  = document.getElementById('type-business');
+    const indFields = document.getElementById('individual-fields');
+    const bizFields = document.getElementById('business-fields');
+    const dobField  = document.getElementById('dob-field');
+    const ageRow    = document.getElementById('check-age-row');
+
+    if (indBtn) {
+      indBtn.style.borderColor = isBusiness ? 'var(--border)' : 'var(--accent)';
+      indBtn.style.background  = isBusiness ? 'var(--bg)' : 'var(--accent-bg)';
+      indBtn.style.color       = isBusiness ? 'var(--muted)' : '';
+    }
+    if (bizBtn) {
+      bizBtn.style.borderColor = isBusiness ? 'var(--accent)' : 'var(--border)';
+      bizBtn.style.background  = isBusiness ? 'var(--accent-bg)' : 'var(--bg)';
+      bizBtn.style.color       = isBusiness ? '' : 'var(--muted)';
+    }
+    if (indFields) indFields.style.display = isBusiness ? 'none' : 'block';
+    if (bizFields) bizFields.style.display = isBusiness ? 'block' : 'none';
+    if (dobField)  dobField.style.display  = isBusiness ? 'none' : 'block';
+    if (ageRow)    ageRow.style.display    = isBusiness ? 'none' : 'flex';
+  };
+
   window.kinCheckAge = () => {
     const dob = document.getElementById('signup-dob')?.value;
     const errorEl = document.getElementById('age-error');
@@ -234,28 +311,34 @@ export function initAuthHandlers() {
   };
 
   window.kinSubmitSignup = async () => {
-    const dob = document.getElementById('signup-dob')?.value;
-    const age = calculateAge(dob);
-    if (age !== null && age < 18) {
-      navigate('signup-blocked');
-      return;
-    }
+    const isBusiness = window.__accountType === 'business';
+    const errEl  = document.getElementById('auth-error');
+    const errMsg = document.getElementById('auth-error-msg');
+    const showError = (msg) => {
+      if (errEl && errMsg) { errMsg.textContent = msg; errEl.style.display = 'flex'; }
+    };
 
-    const name     = document.getElementById('signup-name')?.value.trim();
     const email    = document.getElementById('signup-email')?.value.trim();
     const password = document.getElementById('signup-password')?.value;
     const city     = document.getElementById('signup-city')?.value.trim() || 'Vienna';
 
-    const errEl  = document.getElementById('auth-error');
-    const errMsg = document.getElementById('auth-error-msg');
+    let name, businessName, businessType;
 
-    if (!name || !email || !password) {
-      if (errEl && errMsg) {
-        errMsg.textContent = 'Please fill in your name, email, and password.';
-        errEl.style.display = 'flex';
-      }
-      return;
+    if (isBusiness) {
+      businessName = document.getElementById('signup-business-name')?.value.trim();
+      businessType = document.getElementById('signup-business-type')?.value;
+      name = businessName;
+      if (!businessName) { showError('Please enter your business name.'); return; }
+      if (!businessType) { showError('Please select your business type.'); return; }
+    } else {
+      name = document.getElementById('signup-name')?.value.trim();
+      const dob = document.getElementById('signup-dob')?.value;
+      const age = calculateAge(dob);
+      if (age !== null && age < 18) { navigate('signup-blocked'); return; }
+      if (!name) { showError('Please enter your first name.'); return; }
     }
+
+    if (!email || !password) { showError('Please fill in your email and password.'); return; }
 
     const btn = document.getElementById('signup-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Creating account…'; }
@@ -266,20 +349,28 @@ export function initAuthHandlers() {
     const { data, error } = await supabase.auth.signUp({ email, password });
 
     if (error) {
-      if (errEl && errMsg) { errMsg.textContent = error.message; errEl.style.display = 'flex'; }
+      showError(error.message);
       if (btn) { btn.disabled = false; btn.textContent = 'Continue'; }
       return;
     }
 
-    // Insert profile immediately (before email confirmation if email confirm is off)
     const userId = data.user?.id;
     if (userId) {
       await supabase.from('profiles').insert({
-        id: userId, name, city, avatar_color: avatarColor, interests: [],
+        id:            userId,
+        name,
+        city,
+        avatar_color:  avatarColor,
+        interests:     [],
+        is_business:   isBusiness,
+        business_name: businessName || '',
+        business_type: businessType || '',
       });
-      state.user = { id: userId, name, city, interests: [], initials: name[0].toUpperCase(), avatarColor };
-      // Store pending profile for interests step
-      window.__pendingProfile = { name, city, avatarColor };
+      state.user = {
+        id: userId, name, city, interests: [],
+        initials: name[0].toUpperCase(), avatarColor,
+        isBusiness, businessName, businessType,
+      };
     }
 
     navigate('interests');
@@ -341,12 +432,15 @@ export function initAuthHandlers() {
 
     if (profile) {
       state.user = {
-        id:          data.user.id,
-        name:        profile.name,
-        city:        profile.city,
-        interests:   profile.interests || [],
-        initials:    profile.name[0].toUpperCase(),
-        avatarColor: profile.avatar_color || 'sage',
+        id:           data.user.id,
+        name:         profile.name,
+        city:         profile.city,
+        interests:    profile.interests || [],
+        initials:     profile.name[0].toUpperCase(),
+        avatarColor:  profile.avatar_color  || 'sage',
+        isBusiness:   profile.is_business   || false,
+        businessName: profile.business_name || '',
+        businessType: profile.business_type || '',
       };
     }
 
