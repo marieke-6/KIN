@@ -1,6 +1,6 @@
 // ─── Dashboard & Explore Screens ───
 import { state, navigate, COMMUNITIES } from '../utils/state.js';
-import { commIcon, eventDateBlock, capacityBar, bottomNav, escapeHtml } from '../utils/helpers.js';
+import { commIcon, bottomNav, escapeHtml } from '../utils/helpers.js';
 import { supabase } from '../lib/supabase.js';
 
 export function renderDashboard() {
@@ -59,16 +59,15 @@ async function loadDashboardData() {
     .from('rsvps')
     .select(`event_id, events(id, title, event_date, event_time, district, community_id)`)
     .eq('user_id', state.user.id)
-    .gte('events.event_date', today)
-    .order('events(event_date)', { ascending: true })
-    .limit(3);
+    .limit(10);
 
   const eventsEl = document.getElementById('dash-events');
   if (eventsEl) {
     const upcomingEvents = (rsvpRows || [])
       .map(r => r.events)
-      .filter(Boolean)
-      .sort((a, b) => a.event_date.localeCompare(b.event_date));
+      .filter(e => e && e.event_date >= today)
+      .sort((a, b) => a.event_date.localeCompare(b.event_date))
+      .slice(0, 3);
 
     if (!upcomingEvents.length) {
       eventsEl.innerHTML = `<p class="text-muted text-small mb-lg">No upcoming events. Browse communities to find one!</p>`;
@@ -99,12 +98,8 @@ async function loadDashboardData() {
     .eq('user_id', state.user.id)
     .limit(20);
 
-  // Also include the three seeded communities by default (user is a member of their city)
   const seededComms = Object.values(COMMUNITIES);
-  const joinedIds = new Set((memberRows || []).map(r => r.community_id));
   const memberComms = (memberRows || []).map(r => r.communities).filter(Boolean);
-
-  // Merge: seeded comms first, then user-created ones they've joined
   const allJoined = [
     ...seededComms,
     ...memberComms.filter(c => !COMMUNITIES[c.id]),
@@ -133,8 +128,6 @@ async function loadDashboardData() {
 }
 
 export function renderExplore() {
-  const user = state.user || { city: 'Vienna' };
-
   window.__afterNavigate = () => loadExploreCommunities();
 
   return `
@@ -171,11 +164,9 @@ async function loadExploreCommunities(filter = '') {
   const user = state.user || { city: 'Vienna' };
   const city = user.city || 'Vienna';
 
-  // Load all communities in this city (seeded + user-created)
   let query = supabase
     .from('communities')
-    .select(`id, name, icon, color, city, description, is_seeded,
-             community_members(count)`)
+    .select(`id, name, icon, color, city, description, is_seeded, community_members(count)`)
     .or(`city.eq.${city},is_seeded.eq.true`)
     .order('is_seeded', { ascending: false })
     .limit(50);
@@ -184,8 +175,7 @@ async function loadExploreCommunities(filter = '') {
 
   const { data: comms } = await query;
 
-  // Get communities the user has already joined
-  let joinedIds = new Set(Object.keys(COMMUNITIES)); // seeded = always joined
+  let joinedIds = new Set(Object.keys(COMMUNITIES));
   if (state.user) {
     const { data: joined } = await supabase
       .from('community_members')
@@ -203,8 +193,8 @@ async function loadExploreCommunities(filter = '') {
   }
 
   el.innerHTML = comms.map(c => {
-    const isJoined  = joinedIds.has(c.id);
-    const members   = c.community_members?.[0]?.count ?? 0;
+    const isJoined = joinedIds.has(c.id);
+    const members  = c.community_members?.[0]?.count ?? 0;
     const cityLabel = c.is_seeded ? city : (c.city || city);
     return `
     <div class="card card-clickable mb-md" style="display:flex;align-items:center;gap:12px;padding:11px 14px;"
