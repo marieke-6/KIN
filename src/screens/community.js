@@ -122,7 +122,6 @@ async function initCommunityScreen(commId) {
   // Load members tab
   await loadCommunityMembers(commId);
 }
-}
 
 function renderChatTab(commId) {
   return `
