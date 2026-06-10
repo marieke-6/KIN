@@ -340,7 +340,8 @@ export function initEventHandlers() {
     if (!ev) return;
 
     const pad = n => String(n).padStart(2, '0');
-    const dt = new Date(`${ev.event_date}T${ev.event_time || '00:00'}:00`);
+    const timeStr = (ev.event_time || '00:00').slice(0, 5); // HH:MM only
+    const dt = new Date(`${ev.event_date}T${timeStr}:00`);
     const end = new Date(dt.getTime() + 2 * 60 * 60 * 1000); // assume 2h
     const fmt = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
 
