@@ -1,6 +1,7 @@
 // ─── Profile & Settings Screens ───
 import { state, navigate, INTERESTS } from '../utils/state.js';
-import { bottomNav } from '../utils/helpers.js';
+import { bottomNav, escapeHtml } from '../utils/helpers.js';
+import { supabase } from '../lib/supabase.js';
 
 export function renderProfile() {
   const user = state.user || { name: 'Marieke', city: 'Vienna', initials: 'M' };
@@ -33,11 +34,17 @@ export function renderProfile() {
         <div class="stat-card"><div class="stat-val">12</div><div class="stat-lbl">People met</div></div>
       </div>
 
-      <div class="section-label">Interests</div>
+      <div class="section-label" style="display:flex;justify-content:space-between;align-items:center;">
+        Interests
+        <button class="btn btn-sm" style="font-size:12px;" onclick="window.kinNavigate('edit-profile')">
+          <i class="ti ti-edit" aria-hidden="true"></i> Edit
+        </button>
+      </div>
       <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:var(--space-lg);">
-        <span class="pill pill-amber"><i class="ti ti-chess" aria-hidden="true"></i> Board games</span>
-        <span class="pill pill-sage"><i class="ti ti-run" aria-hidden="true"></i> Running</span>
-        <span class="pill pill-lav"><i class="ti ti-palette" aria-hidden="true"></i> Painting</span>
+        ${(user.interests || []).length
+          ? (user.interests).map(i => `<span class="pill pill-sage">${escapeHtml(i)}</span>`).join('')
+          : `<p class="text-muted text-small">No interests added yet. <span class="text-accent" style="cursor:pointer;" onclick="window.kinNavigate('edit-profile')">Add some →</span></p>`
+        }
       </div>
 
       <div class="section-label">Settings</div>
@@ -65,7 +72,7 @@ export function renderProfile() {
         </div>
       </div>
 
-      <button class="btn btn-danger btn-full mb-lg" onclick="window.kinNavigate('landing')">
+      <button class="btn btn-danger btn-full mb-lg" onclick="window.kinLogout()">
         <i class="ti ti-logout" aria-hidden="true"></i> Log out
       </button>
     </div>
@@ -74,11 +81,12 @@ export function renderProfile() {
 }
 
 export function renderEditProfile() {
-  const user = state.user || { name: 'Marieke', city: 'Vienna', initials: 'M' };
-  const chips = INTERESTS.map(i => {
-    const sel = ['Board games','Running','Painting'].includes(i);
-    return `<span class="interest-chip${sel?' selected':''}" onclick="this.classList.toggle('selected')">${i}</span>`;
-  }).join('');
+  const user = state.user || { name: '', city: '', initials: 'M', interests: [] };
+  const current = new Set(user.interests || []);
+  const chips = INTERESTS.map(i =>
+    `<span class="interest-chip${current.has(i) ? ' selected' : ''}"
+           onclick="this.classList.toggle('selected')">${escapeHtml(i)}</span>`
+  ).join('');
 
   return `
   <main>
@@ -89,27 +97,27 @@ export function renderEditProfile() {
         </button>
         <span class="fw-500" style="font-size:16px;">Edit profile</span>
       </div>
-      <button class="btn btn-primary btn-sm" onclick="window.kinNavigate('profile')">Save</button>
+      <button class="btn btn-primary btn-sm" id="edit-profile-save-btn" onclick="window.kinSaveEditProfile()">Save</button>
     </nav>
     <div class="screen-body">
+      <div id="edit-profile-error" class="card-danger mb-lg" style="display:none;">
+        <p id="edit-profile-error-msg" style="font-size:13px;color:var(--red-dark);"></p>
+      </div>
       <div style="display:flex;flex-direction:column;align-items:center;margin-bottom:22px;">
-        <div class="avatar avatar-lg avatar-sage mb-md">${user.initials}</div>
+        <div class="avatar avatar-lg avatar-${user.avatarColor || 'sage'} mb-md">${user.initials}</div>
         <p class="text-tiny text-muted">No profile photo on Kin — your name is enough</p>
       </div>
       <div class="field">
         <label class="field-label" for="edit-name">First name only</label>
-        <input type="text" id="edit-name" value="${user.name}" />
+        <input type="text" id="edit-name" value="${escapeHtml(user.name)}" />
       </div>
       <div class="field">
         <label class="field-label" for="edit-city">City</label>
-        <input type="text" id="edit-city" value="${user.city}" />
-      </div>
-      <div class="field">
-        <label class="field-label" for="edit-bio">Short bio (optional)</label>
-        <textarea id="edit-bio" rows="2" placeholder="e.g. Moved here last year, looking to meet people"></textarea>
+        <input type="text" id="edit-city" value="${escapeHtml(user.city)}" />
       </div>
       <div class="field">
         <label class="field-label">Interests</label>
+        <p class="text-tiny text-muted" style="margin-bottom:10px;">Tap to select or deselect. These help you find communities.</p>
         <div style="display:flex;flex-wrap:wrap;gap:7px;">${chips}</div>
       </div>
     </div>
@@ -275,5 +283,41 @@ export function initProfileHandlers() {
     const isOn = btn.classList.contains('on');
     btn.classList.toggle('on', !isOn);
     btn.classList.toggle('off', isOn);
+  };
+
+  window.kinSaveEditProfile = async () => {
+    if (!state.user) { navigate('login'); return; }
+    const name = document.getElementById('edit-name')?.value.trim();
+    const city = document.getElementById('edit-city')?.value.trim();
+    const interests = [...document.querySelectorAll('.interest-chip.selected')].map(el => el.textContent.trim());
+
+    const errEl  = document.getElementById('edit-profile-error');
+    const errMsg = document.getElementById('edit-profile-error-msg');
+    if (!name) {
+      if (errEl && errMsg) { errMsg.textContent = 'Please enter your name.'; errEl.style.display = 'block'; }
+      return;
+    }
+
+    const btn = document.getElementById('edit-profile-save-btn');
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+
+    const { error } = await supabase.from('profiles').update({ name, city, interests }).eq('id', state.user.id);
+
+    if (error) {
+      if (errEl && errMsg) { errMsg.textContent = error.message; errEl.style.display = 'block'; }
+      if (btn) { btn.disabled = false; btn.textContent = 'Save'; }
+      return;
+    }
+
+    state.user.name     = name;
+    state.user.city     = city;
+    state.user.interests = interests;
+    state.user.initials  = name[0].toUpperCase();
+
+    navigate('profile');
+  };
+
+  window.kinLogout = async () => {
+    await supabase.auth.signOut();
   };
 }

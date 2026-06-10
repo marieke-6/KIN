@@ -24,9 +24,15 @@ export const state = {
 // Replace with API calls in production
 
 export const INTERESTS = [
-  'Running','Hiking','Painting','Cooking','Volleyball',
-  'Yoga','Photography','Chess','Cycling','Board games',
-  'Book club','Dancing','Climbing','Swimming','Film club',
+  'Running','Trail running','Road cycling','Mountain biking','Ski touring',
+  'Skiing','Snowboarding','Hiking','Climbing','Swimming',
+  'Volleyball','Football','Basketball','Tennis','Padel',
+  'Yoga','Pilates','Crossfit','Rowing','Triathlon',
+  'Board games','Chess','Card games','Dungeons & Dragons',
+  'Painting','Drawing','Photography','Pottery','Knitting & crafts',
+  'Cooking','Baking','Kaffee & Kuchen','Wine tasting',
+  'Book club','Film club','Language exchange','Dancing',
+  'Music','Theatre','Concerts','Volunteering',
 ];
 
 export const COMMUNITIES = {
