@@ -538,19 +538,22 @@ export function initAuthHandlers() {
       .eq('id', data.user.id)
       .maybeSingle();
 
-    if (profile) {
-      state.user = {
-        id:           data.user.id,
-        name:         profile.name,
-        city:         profile.city,
-        interests:    profile.interests || [],
-        initials:     profile.name[0].toUpperCase(),
-        avatarColor:  profile.avatar_color  || 'sage',
-        isBusiness:   profile.is_business   || false,
-        businessName: profile.business_name || '',
-        businessType: profile.business_type || '',
-      };
+    if (!profile) {
+      navigate('complete-profile');
+      return;
     }
+
+    state.user = {
+      id:           data.user.id,
+      name:         profile.name,
+      city:         profile.city,
+      interests:    profile.interests || [],
+      initials:     profile.name[0].toUpperCase(),
+      avatarColor:  profile.avatar_color  || 'sage',
+      isBusiness:   profile.is_business   || false,
+      businessName: profile.business_name || '',
+      businessType: profile.business_type || '',
+    };
 
     navigate('dashboard');
   };
