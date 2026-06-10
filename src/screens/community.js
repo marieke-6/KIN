@@ -5,22 +5,8 @@ import { supabase } from '../lib/supabase.js';
 
 export function renderCommunity(params = {}) {
   const commId = params.id || 'board-games';
-  const comm = COMMUNITIES[commId];
-  if (!comm) return '<p>Community not found.</p>';
 
-  const user = state.user || { city: 'Vienna', initials: 'M', avatarColor: 'sage' };
-  const cities = Object.keys(comm.cities);
-  const selectedCity = state.communityCity || user.city || cities[0];
-  const cityData = comm.cities[selectedCity] || Object.values(comm.cities)[0];
-
-  const cityChips = cities.map(c => `
-    <span class="city-chip${c === selectedCity ? ' active' : ''}"
-          onclick="window.kinSetCommunityCity('${commId}','${c}')">
-      <i class="ti ti-map-pin" aria-hidden="true" style="font-size:13px;"></i> ${c}
-    </span>`).join('');
-
-  // Register async post-render hook to load messages
-  window.__afterNavigate = () => loadCommunityMessages(commId, selectedCity);
+  window.__afterNavigate = () => initCommunityScreen(commId);
 
   return `
   <main>
@@ -29,18 +15,16 @@ export function renderCommunity(params = {}) {
         <button class="nav-back-btn" onclick="window.kinNavigate('dashboard')" aria-label="Back">
           <i class="ti ti-arrow-left" aria-hidden="true"></i>
         </button>
-        ${commIcon(comm.icon, comm.color, 'sm')}
-        <div>
-          <p class="fw-500" style="font-size:15px;">${comm.name} — ${selectedCity}</p>
-          <p class="text-tiny text-muted">${cityData.members} members</p>
+        <div id="comm-nav-info">
+          <p class="fw-500" style="font-size:15px;">Loading…</p>
         </div>
       </div>
       <span class="pill pill-sage text-tiny"><i class="ti ti-check" aria-hidden="true"></i> Joined</span>
     </nav>
 
-    <div style="padding:10px 16px;background:var(--bg);border-bottom:0.5px solid var(--border);">
+    <div id="comm-city-bar" style="padding:10px 16px;background:var(--bg);border-bottom:0.5px solid var(--border);display:none;">
       <p class="text-tiny text-muted mb-sm">Showing results for:</p>
-      <div style="display:flex;gap:7px;flex-wrap:wrap;">${cityChips}</div>
+      <div id="comm-city-chips" style="display:flex;gap:7px;flex-wrap:wrap;"></div>
     </div>
 
     <div class="tab-bar" id="comm-tab-bar">
@@ -59,18 +43,88 @@ export function renderCommunity(params = {}) {
     </div>
 
     <div id="tab-chat" style="display:${(!state.communityTab || state.communityTab==='chat')?'block':'none'}">
-      ${renderChatTab(commId, selectedCity)}
+      ${renderChatTab(commId)}
     </div>
     <div id="tab-events" style="display:${state.communityTab==='events'?'block':'none'}">
-      ${renderEventsTab(commId, selectedCity, comm)}
+      <div style="padding:14px 16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <span class="fw-500">Upcoming events</span>
+          <button class="btn btn-primary btn-sm" onclick="window.kinNavigate('create-event',{id:'${commId}'})">
+            <i class="ti ti-plus" aria-hidden="true"></i> New event
+          </button>
+        </div>
+        <div id="events-list-${commId}"><p class="text-muted text-small">Loading…</p></div>
+      </div>
     </div>
     <div id="tab-members" style="display:${state.communityTab==='members'?'block':'none'}">
-      ${renderMembersTab(cityData, selectedCity)}
+      <div id="tab-members-content" style="padding:14px 16px;">
+        <p class="text-muted text-small">Loading…</p>
+      </div>
     </div>
   </main>`;
 }
 
-function renderChatTab(commId, city) {
+async function initCommunityScreen(commId) {
+  const user = state.user || { city: 'Vienna' };
+
+  // Load community from DB (handles both seeded and user-created)
+  const { data: comm } = await supabase
+    .from('communities')
+    .select('*')
+    .eq('id', commId)
+    .single();
+
+  if (!comm) return;
+
+  // Update nav
+  const navInfo = document.getElementById('comm-nav-info');
+  if (navInfo) {
+    navInfo.innerHTML = `
+      ${commIcon(comm.icon, comm.color, 'sm')}
+      <div>
+        <p class="fw-500" style="font-size:15px;">${escapeHtml(comm.name)}</p>
+        <p class="text-tiny text-muted" id="comm-member-count">…</p>
+      </div>`;
+  }
+
+  // For seeded communities, show city chips
+  const staticComm = COMMUNITIES[commId];
+  const selectedCity = state.communityCity || user.city || comm.city || 'Vienna';
+
+  if (staticComm) {
+    const cityBar = document.getElementById('comm-city-bar');
+    const cityChipsEl = document.getElementById('comm-city-chips');
+    if (cityBar) cityBar.style.display = 'block';
+    if (cityChipsEl) {
+      cityChipsEl.innerHTML = Object.keys(staticComm.cities).map(c => `
+        <span class="city-chip${c === selectedCity ? ' active' : ''}"
+              onclick="window.kinSetCommunityCity('${commId}','${c}')">
+          <i class="ti ti-map-pin" aria-hidden="true" style="font-size:13px;"></i> ${c}
+        </span>`).join('');
+    }
+  }
+
+  // Load member count
+  const { count } = await supabase
+    .from('community_members')
+    .select('*', { count: 'exact', head: true })
+    .eq('community_id', commId);
+
+  const countEl = document.getElementById('comm-member-count');
+  if (countEl) countEl.textContent = `${count ?? 0} members`;
+
+  // Load chat messages
+  await loadCommunityMessages(commId, selectedCity);
+
+  // Load events
+  await loadCommunityEvents(commId, selectedCity);
+
+  // Load members tab
+  await loadCommunityMembers(commId);
+}
+}
+
+function renderChatTab(commId) {
   return `
   <div style="padding:14px 16px;min-height:120px;" id="chat-messages-${commId}">
     <div style="display:flex;align-items:center;justify-content:center;padding:20px 0;">
@@ -79,11 +133,47 @@ function renderChatTab(commId, city) {
   </div>
   <div class="chat-input-row">
     <input type="text" id="comm-chat-input" placeholder="Say something…"
-           onkeydown="if(event.key==='Enter')window.kinSendCommMsg('${commId}','${city}')" />
-    <button class="send-btn" onclick="window.kinSendCommMsg('${commId}','${city}')" aria-label="Send">
+           onkeydown="if(event.key==='Enter')window.kinSendCommMsg('${commId}')" />
+    <button class="send-btn" onclick="window.kinSendCommMsg('${commId}')" aria-label="Send">
       <i class="ti ti-send" aria-hidden="true"></i>
     </button>
   </div>`;
+}
+
+async function loadCommunityMembers(commId) {
+  const el = document.getElementById('tab-members-content');
+  if (!el) return;
+
+  const { data: rows } = await supabase
+    .from('community_members')
+    .select('user_id, joined_at, profiles(name, avatar_color)')
+    .eq('community_id', commId)
+    .order('joined_at', { ascending: true })
+    .limit(100);
+
+  if (!rows?.length) {
+    el.innerHTML = `<p class="text-muted text-small">No members yet.</p>`;
+    return;
+  }
+
+  el.innerHTML = rows.map(r => {
+    const name  = r.profiles?.name || 'Member';
+    const color = r.profiles?.avatar_color || 'sage';
+    const init  = name[0].toUpperCase();
+    const isYou = r.user_id === state.user?.id;
+    const joined = new Date(r.joined_at).toLocaleDateString('en', { day: 'numeric', month: 'short', year: 'numeric' });
+    return `
+    <div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--border);">
+      ${avatar(init, color, 'sm')}
+      <div style="flex:1;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span class="fw-500" style="font-size:14px;">${escapeHtml(name)}</span>
+          ${isYou ? `<span class="new-badge">you</span>` : ''}
+        </div>
+        <span class="text-tiny text-muted">Joined ${joined}</span>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 async function loadCommunityMessages(commId, city) {
@@ -126,23 +216,6 @@ async function loadCommunityMessages(commId, city) {
   }).join('');
 
   container.innerHTML = msgHtml || `<p class="text-muted text-small" style="padding:12px 0;">No messages yet. Say hello!</p>`;
-}
-
-function renderEventsTab(commId, city, comm) {
-  window.__afterNavigate = () => loadCommunityEvents(commId, city);
-
-  return `
-  <div style="padding:14px 16px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-      <span class="fw-500">Upcoming in ${city}</span>
-      <button class="btn btn-primary btn-sm" onclick="window.kinNavigate('create-event',{id:'${commId}'})">
-        <i class="ti ti-plus" aria-hidden="true"></i> New event
-      </button>
-    </div>
-    <div id="events-list-${commId}">
-      <p class="text-muted text-small">Loading events…</p>
-    </div>
-  </div>`;
 }
 
 async function loadCommunityEvents(commId, city) {
@@ -205,37 +278,6 @@ async function loadCommunityEvents(commId, city) {
   }).join('');
 }
 
-function renderMembersTab(cityData, city) {
-  const members = MEMBERS_BY_CITY[city] || [];
-
-  return `<div style="padding:14px 16px;">
-    <div style="display:flex;gap:9px;margin-bottom:16px;">
-      <div class="stat-card"><div class="stat-val">${cityData.members}</div><div class="stat-lbl">Members</div></div>
-      <div class="stat-card"><div class="stat-val">${cityData.active}</div><div class="stat-lbl">Active this month</div></div>
-      <div class="stat-card"><div class="stat-val">${cityData.events}</div><div class="stat-lbl">Events this month</div></div>
-    </div>
-
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-      <span class="fw-500">Members in ${city}</span>
-      <select id="activity-filter" onchange="window.kinFilterMembers('${city}')" style="width:auto;font-size:12px;padding:4px 8px;">
-        <option value="all">All members</option>
-        <option value="active">Active only</option>
-        <option value="inactive">Inactive</option>
-      </select>
-    </div>
-
-    <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;flex-wrap:wrap;">
-      <span class="text-tiny text-muted" style="display:flex;align-items:center;gap:5px;"><span class="activity-dot dot-green"></span> Active recently</span>
-      <span class="text-tiny text-muted" style="display:flex;align-items:center;gap:5px;"><span class="activity-dot dot-amber"></span> 1–3 months ago</span>
-      <span class="text-tiny text-muted" style="display:flex;align-items:center;gap:5px;"><span class="activity-dot dot-red"></span> 3+ months inactive</span>
-      <span class="text-tiny text-muted" style="display:flex;align-items:center;gap:5px;"><span class="activity-dot dot-gray"></span> Never attended</span>
-    </div>
-
-    <div id="members-list">
-      ${renderMemberRows(members)}
-    </div>
-  </div>`;
-}
 
 export function renderMemberRows(members) {
   return members.map(m => `
@@ -274,7 +316,8 @@ export function initCommunityHandlers() {
     });
   };
 
-  window.kinSendCommMsg = async (commId, city) => {
+  window.kinSendCommMsg = async (commId) => {
+    const city = state.communityCity || state.user?.city || 'Vienna';
     const input = document.getElementById('comm-chat-input');
     if (!input) return;
     const text = input.value.trim();

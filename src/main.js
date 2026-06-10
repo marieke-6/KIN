@@ -4,7 +4,8 @@ import { supabase } from './lib/supabase.js';
 
 // Screens
 import { renderLanding, renderSignup, renderSignupBlocked, renderInterests, renderLogin, initAuthHandlers } from './screens/auth.js';
-import { renderDashboard, renderExplore, renderNotifications } from './screens/dashboard.js';
+import { renderDashboard, renderExplore, renderNotifications, initDashboardHandlers } from './screens/dashboard.js';
+import { renderCreateCommunity, initCreateCommunityHandlers } from './screens/create-community.js';
 import { renderCommunity, initCommunityHandlers } from './screens/community.js';
 import { renderEventDetail, renderCreateEvent, renderPastEvent, initEventHandlers } from './screens/events.js';
 import { renderProfile, renderEditProfile, renderPrivacy, renderNotificationSettings, renderDeleteAccount, initProfileHandlers } from './screens/profile.js';
@@ -19,6 +20,7 @@ register('interests',             renderInterests);
 register('login',                 renderLogin);
 register('dashboard',             renderDashboard);
 register('explore',               renderExplore);
+register('create-community',      renderCreateCommunity);
 register('notifications',         renderNotifications);
 register('community',             (p) => renderCommunity(p));
 register('event-detail',          (p) => renderEventDetail(p));
@@ -53,6 +55,8 @@ initEventHandlers();
 initProfileHandlers();
 initReportHandlers();
 initAdminHandlers();
+initDashboardHandlers();
+initCreateCommunityHandlers();
 
 // ── Listen for auth state changes (e.g. email confirmation, token refresh) ──
 supabase.auth.onAuthStateChange((event, session) => {

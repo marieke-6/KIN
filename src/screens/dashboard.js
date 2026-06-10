@@ -1,40 +1,14 @@
 // ─── Dashboard & Explore Screens ───
-import { state, navigate, COMMUNITIES, EVENTS_BY_CITY } from '../utils/state.js';
-import { commIcon, eventDateBlock, capacityBar, bottomNav } from '../utils/helpers.js';
+import { state, navigate, COMMUNITIES } from '../utils/state.js';
+import { commIcon, eventDateBlock, capacityBar, bottomNav, escapeHtml } from '../utils/helpers.js';
+import { supabase } from '../lib/supabase.js';
 
 export function renderDashboard() {
-  const user = state.user || { name: 'Marieke', city: 'Vienna', initials: 'M' };
-  const city = user.city || 'Vienna';
-  const events = (EVENTS_BY_CITY[city] || []).slice(0, 2);
-
-  const eventCards = events.map(ev => {
-    const comm = Object.values(COMMUNITIES).find(c => c.id === ev.community);
-    const hasChatNotif = ev.rsvpd && ev.privateChatMessages.length > 0;
-    return `
-    <div class="card card-clickable mb-md" onclick="window.kinNavigate('event-detail','${ev.id}')" 
-         style="display:flex;align-items:center;gap:12px;">
-      ${commIcon(comm.icon, comm.color, 'md')}
-      <div style="flex:1;min-width:0;">
-        <p class="fw-500" style="font-size:14px;">${ev.title}</p>
-        <p class="text-muted text-small">${ev.day} ${ev.mon} · ${ev.time} · ${ev.districtOnly}</p>
-      </div>
-      ${hasChatNotif ? `<span class="new-badge">chat open</span>` : ''}
-    </div>`;
-  }).join('');
-
-  const communityCards = Object.values(COMMUNITIES).map(c => `
-    <div class="card card-clickable mb-md" onclick="window.kinNavigate('community','${c.id}')"
-         style="display:flex;align-items:center;gap:12px;padding:11px 14px;">
-      ${commIcon(c.icon, c.color, 'sm')}
-      <div style="flex:1;">
-        <p class="fw-500" style="font-size:14px;">${c.name}</p>
-        <p class="text-muted text-small">${c.cities[city]?.members || 0} members</p>
-      </div>
-      <i class="ti ti-chevron-right" aria-hidden="true" style="font-size:16px;color:var(--muted);"></i>
-    </div>`).join('');
-
+  const user = state.user || { name: 'Friend', city: 'Vienna', initials: 'M', avatarColor: 'sage' };
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+
+  window.__afterNavigate = () => loadDashboardData();
 
   return `
   <main>
@@ -43,32 +17,31 @@ export function renderDashboard() {
       <div style="display:flex;align-items:center;gap:12px;">
         <div style="position:relative;cursor:pointer;" onclick="window.kinNavigate('notifications')">
           <i class="ti ti-bell" aria-hidden="true" style="font-size:22px;color:var(--muted);"></i>
-          <span class="notif-badge"></span>
         </div>
-        <div class="avatar avatar-sm avatar-sage" style="cursor:pointer;" 
+        <div class="avatar avatar-sm avatar-${user.avatarColor || 'sage'}" style="cursor:pointer;"
              onclick="window.kinNavigate('profile')">${user.initials}</div>
       </div>
     </nav>
 
     <div class="screen-body">
-      <p style="font-size:20px;font-weight:500;margin-bottom:2px;">${greeting}, ${user.name}</p>
-      <p class="text-muted text-small mb-lg">${city} · ${Object.keys(COMMUNITIES).length} active communities</p>
-
-      <div class="stat-row">
-        <div class="stat-card"><div class="stat-val">3</div><div class="stat-lbl">Communities</div></div>
-        <div class="stat-card"><div class="stat-val">5</div><div class="stat-lbl">Events attended</div></div>
-        <div class="stat-card"><div class="stat-val">2</div><div class="stat-lbl">Coming up</div></div>
-      </div>
+      <p style="font-size:20px;font-weight:500;margin-bottom:2px;">${greeting}, ${escapeHtml(user.name)}</p>
+      <p class="text-muted text-small mb-lg" id="dash-subtitle">${escapeHtml(user.city || 'your city')}</p>
 
       <div class="section-label">Your next events</div>
-      ${eventCards || '<p class="text-muted text-small mb-lg">No upcoming events in ' + city + '.</p>'}
+      <div id="dash-events">
+        <p class="text-muted text-small mb-lg">Loading…</p>
+      </div>
 
-      <div class="section-label">Your communities</div>
-      ${communityCards}
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span class="section-label" style="margin-bottom:0;">Your communities</span>
+      </div>
+      <div id="dash-communities">
+        <p class="text-muted text-small mb-lg">Loading…</p>
+      </div>
 
-      <button class="btn btn-full mb-lg" onclick="window.kinNavigate('explore')" 
+      <button class="btn btn-full mb-lg" onclick="window.kinNavigate('explore')"
               style="display:flex;align-items:center;justify-content:center;gap:6px;">
-        <i class="ti ti-compass" aria-hidden="true"></i> Explore more communities
+        <i class="ti ti-compass" aria-hidden="true"></i> Explore &amp; create communities
       </button>
     </div>
 
@@ -76,36 +49,93 @@ export function renderDashboard() {
   </main>`;
 }
 
-export function renderExplore() {
-  const user = state.user || { city: 'Vienna' };
-  const city = user.city || 'Vienna';
+async function loadDashboardData() {
+  if (!state.user) return;
+  const city = state.user.city || 'Vienna';
+  const today = new Date().toISOString().split('T')[0];
 
-  const allComms = [
-    ...Object.values(COMMUNITIES),
-    { id:'hiking',     name:'Hiking',    icon:'ti-mountain',       color:'sage' },
-    { id:'volleyball', name:'Volleyball',icon:'ti-ball-volleyball', color:'lav' },
-    { id:'cooking',    name:'Cooking',   icon:'ti-chef-hat',        color:'peach' },
-    { id:'book-club',  name:'Book club', icon:'ti-book',            color:'amber' },
+  // Load upcoming events the user has RSVP'd to
+  const { data: rsvpRows } = await supabase
+    .from('rsvps')
+    .select(`event_id, events(id, title, event_date, event_time, district, community_id)`)
+    .eq('user_id', state.user.id)
+    .gte('events.event_date', today)
+    .order('events(event_date)', { ascending: true })
+    .limit(3);
+
+  const eventsEl = document.getElementById('dash-events');
+  if (eventsEl) {
+    const upcomingEvents = (rsvpRows || [])
+      .map(r => r.events)
+      .filter(Boolean)
+      .sort((a, b) => a.event_date.localeCompare(b.event_date));
+
+    if (!upcomingEvents.length) {
+      eventsEl.innerHTML = `<p class="text-muted text-small mb-lg">No upcoming events. Browse communities to find one!</p>`;
+    } else {
+      eventsEl.innerHTML = upcomingEvents.map(ev => {
+        const d   = new Date(ev.event_date + 'T00:00:00');
+        const day = d.getDate();
+        const mon = d.toLocaleString('en', { month: 'short' }).toUpperCase();
+        const comm = COMMUNITIES[ev.community_id];
+        return `
+        <div class="card card-clickable mb-md" onclick="window.kinNavigate('event-detail',{id:'${ev.id}'})"
+             style="display:flex;align-items:center;gap:12px;">
+          ${comm ? commIcon(comm.icon, comm.color, 'md') : `<div class="comm-icon comm-icon-md" style="background:var(--sage);"></div>`}
+          <div style="flex:1;min-width:0;">
+            <p class="fw-500" style="font-size:14px;">${escapeHtml(ev.title)}</p>
+            <p class="text-muted text-small">${day} ${mon} · ${(ev.event_time || '').slice(0,5)} · ${escapeHtml(ev.district)}</p>
+          </div>
+          <span class="new-badge">chat open</span>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // Load communities the user has joined
+  const { data: memberRows } = await supabase
+    .from('community_members')
+    .select(`community_id, communities(id, name, icon, color, city)`)
+    .eq('user_id', state.user.id)
+    .limit(20);
+
+  // Also include the three seeded communities by default (user is a member of their city)
+  const seededComms = Object.values(COMMUNITIES);
+  const joinedIds = new Set((memberRows || []).map(r => r.community_id));
+  const memberComms = (memberRows || []).map(r => r.communities).filter(Boolean);
+
+  // Merge: seeded comms first, then user-created ones they've joined
+  const allJoined = [
+    ...seededComms,
+    ...memberComms.filter(c => !COMMUNITIES[c.id]),
   ];
 
-  const joined = new Set(Object.keys(COMMUNITIES));
+  const commEl = document.getElementById('dash-communities');
+  if (commEl) {
+    if (!allJoined.length) {
+      commEl.innerHTML = `<p class="text-muted text-small mb-lg">You haven't joined any communities yet.</p>`;
+    } else {
+      commEl.innerHTML = allJoined.map(c => `
+        <div class="card card-clickable mb-md" onclick="window.kinNavigate('community',{id:'${c.id}'})"
+             style="display:flex;align-items:center;gap:12px;padding:11px 14px;">
+          ${commIcon(c.icon, c.color, 'sm')}
+          <div style="flex:1;">
+            <p class="fw-500" style="font-size:14px;">${escapeHtml(c.name)}</p>
+            <p class="text-muted text-small">${escapeHtml(c.city || city)}</p>
+          </div>
+          <i class="ti ti-chevron-right" aria-hidden="true" style="font-size:16px;color:var(--muted);"></i>
+        </div>`).join('');
+    }
+  }
 
-  const rows = allComms.map(c => {
-    const isJoined = joined.has(c.id);
-    const members = COMMUNITIES[c.id]?.cities?.[city]?.members || Math.floor(Math.random() * 30 + 8);
-    return `
-    <div class="card card-clickable mb-md" style="display:flex;align-items:center;gap:12px;padding:11px 14px;">
-      ${commIcon(c.icon, c.color, 'sm')}
-      <div style="flex:1;">
-        <p class="fw-500" style="font-size:14px;">${c.name}</p>
-        <p class="text-muted text-small">${members} members in ${city}</p>
-      </div>
-      ${isJoined
-        ? `<span class="pill pill-sage text-tiny"><i class="ti ti-check" aria-hidden="true"></i> Joined</span>`
-        : `<button class="btn btn-primary btn-sm">Join</button>`
-      }
-    </div>`;
-  }).join('');
+  const subtitleEl = document.getElementById('dash-subtitle');
+  if (subtitleEl) subtitleEl.textContent = `${city} · ${allJoined.length} communities joined`;
+}
+
+export function renderExplore() {
+  const user = state.user || { city: 'Vienna' };
+
+  window.__afterNavigate = () => loadExploreCommunities();
 
   return `
   <main>
@@ -114,16 +144,83 @@ export function renderExplore() {
         <button class="nav-back-btn" onclick="window.kinNavigate('dashboard')" aria-label="Back">
           <i class="ti ti-arrow-left" aria-hidden="true"></i>
         </button>
-        <span style="font-size:16px;font-weight:500;">Explore in ${city}</span>
+        <span style="font-size:16px;font-weight:500;">Explore communities</span>
       </div>
     </nav>
     <div class="screen-body">
-      <input type="text" placeholder="Search communities..." style="margin-bottom:var(--space-lg);" />
-      <div class="section-label">Popular near you</div>
-      ${rows}
+      <button class="btn btn-primary btn-full mb-lg"
+              onclick="window.kinNavigate('create-community')"
+              style="display:flex;align-items:center;justify-content:center;gap:8px;">
+        <i class="ti ti-plus" aria-hidden="true"></i> Start a new community
+      </button>
+
+      <input type="text" id="explore-search" placeholder="Search communities…"
+             oninput="window.kinSearchCommunities()"
+             style="margin-bottom:var(--space-lg);" />
+
+      <div class="section-label">Communities near you</div>
+      <div id="explore-list">
+        <p class="text-muted text-small">Loading…</p>
+      </div>
     </div>
     ${bottomNav('explore')}
   </main>`;
+}
+
+async function loadExploreCommunities(filter = '') {
+  const user = state.user || { city: 'Vienna' };
+  const city = user.city || 'Vienna';
+
+  // Load all communities in this city (seeded + user-created)
+  let query = supabase
+    .from('communities')
+    .select(`id, name, icon, color, city, description, is_seeded,
+             community_members(count)`)
+    .or(`city.eq.${city},is_seeded.eq.true`)
+    .order('is_seeded', { ascending: false })
+    .limit(50);
+
+  if (filter) query = query.ilike('name', `%${filter}%`);
+
+  const { data: comms } = await query;
+
+  // Get communities the user has already joined
+  let joinedIds = new Set(Object.keys(COMMUNITIES)); // seeded = always joined
+  if (state.user) {
+    const { data: joined } = await supabase
+      .from('community_members')
+      .select('community_id')
+      .eq('user_id', state.user.id);
+    (joined || []).forEach(r => joinedIds.add(r.community_id));
+  }
+
+  const el = document.getElementById('explore-list');
+  if (!el) return;
+
+  if (!comms?.length) {
+    el.innerHTML = `<p class="text-muted text-small">No communities found.</p>`;
+    return;
+  }
+
+  el.innerHTML = comms.map(c => {
+    const isJoined  = joinedIds.has(c.id);
+    const members   = c.community_members?.[0]?.count ?? 0;
+    const cityLabel = c.is_seeded ? city : (c.city || city);
+    return `
+    <div class="card card-clickable mb-md" style="display:flex;align-items:center;gap:12px;padding:11px 14px;"
+         onclick="window.kinNavigate('community',{id:'${c.id}'})">
+      ${commIcon(c.icon, c.color, 'sm')}
+      <div style="flex:1;min-width:0;">
+        <p class="fw-500" style="font-size:14px;">${escapeHtml(c.name)}</p>
+        <p class="text-muted text-small">${members} members · ${escapeHtml(cityLabel)}</p>
+        ${c.description ? `<p class="text-tiny text-muted" style="margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(c.description)}</p>` : ''}
+      </div>
+      ${isJoined
+        ? `<span class="pill pill-sage text-tiny"><i class="ti ti-check" aria-hidden="true"></i> Joined</span>`
+        : `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();window.kinJoinCommunity('${c.id}',this)">Join</button>`
+      }
+    </div>`;
+  }).join('');
 }
 
 export function renderNotifications() {
@@ -157,4 +254,21 @@ export function renderNotifications() {
     </nav>
     <div class="screen-body">${rows}</div>
   </main>`;
+}
+
+export function initDashboardHandlers() {
+  window.kinJoinCommunity = async (commId, btn) => {
+    if (!state.user) { navigate('login'); return; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Joining…'; }
+    await supabase.from('community_members').insert({
+      community_id: commId,
+      user_id: state.user.id,
+    });
+    navigate('community', { id: commId });
+  };
+
+  window.kinSearchCommunities = () => {
+    const filter = document.getElementById('explore-search')?.value.trim() || '';
+    loadExploreCommunities(filter);
+  };
 }
