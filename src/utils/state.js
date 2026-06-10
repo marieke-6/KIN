@@ -263,9 +263,13 @@ export async function loadSession(supabase) {
     .from('profiles')
     .select('*')
     .eq('id', session.user.id)
-    .single();
+    .maybeSingle();
 
-  if (!profile) return null;
+  if (!profile) {
+    // Session exists but no profile — sign out and start fresh
+    await supabase.auth.signOut();
+    return null;
+  }
 
   state.user = {
     id:           session.user.id,

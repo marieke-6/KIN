@@ -428,7 +428,7 @@ export function initAuthHandlers() {
       .from('profiles')
       .select('*')
       .eq('id', data.user.id)
-      .single();
+      .maybeSingle();
 
     if (profile) {
       state.user = {
