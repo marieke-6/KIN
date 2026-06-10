@@ -70,10 +70,11 @@ export function navBar({ logo = false, title = '', subtitle = '', back = null, r
  */
 export function bottomNav(activeScreen) {
   const items = [
-    { screen: 'dashboard', icon: 'ti-home',           label: 'Home' },
-    { screen: 'explore',   icon: 'ti-compass',         label: 'Explore' },
-    { screen: 'events',    icon: 'ti-calendar-event',  label: 'Events' },
-    { screen: 'profile',   icon: 'ti-user',            label: 'Profile' },
+    { screen: 'dashboard',       icon: 'ti-home',        label: 'Home' },
+    { screen: 'explore',         icon: 'ti-compass',     label: 'Explore' },
+    { screen: 'recommendations', icon: 'ti-star',        label: 'Tips' },
+    { screen: 'stammtisch',      icon: 'ti-beer',        label: 'Stammtisch' },
+    { screen: 'profile',         icon: 'ti-user',        label: 'Profile' },
   ];
   return `<nav class="bottom-nav" role="navigation" aria-label="Main navigation">
     ${items.map(i => `

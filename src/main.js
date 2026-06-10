@@ -10,6 +10,8 @@ import { renderCommunity, initCommunityHandlers } from './screens/community.js';
 import { renderEventDetail, renderCreateEvent, renderPastEvent, initEventHandlers } from './screens/events.js';
 import { renderProfile, renderEditProfile, renderPrivacy, renderNotificationSettings, renderDeleteAccount, initProfileHandlers } from './screens/profile.js';
 import { renderReportMember, renderReportMessage, renderReportSent, initReportHandlers } from './screens/reporting.js';
+import { renderRecommendations } from './screens/recommendations.js';
+import { renderStammtisch } from './screens/stammtisch.js';
 import { renderAdminPanel, initAdminHandlers } from './admin/admin.js';
 
 // ── Register all routes ──
@@ -19,6 +21,8 @@ register('signup-blocked',        renderSignupBlocked);
 register('interests',             renderInterests);
 register('login',                 renderLogin);
 register('complete-profile',      renderCompleteProfile);
+register('recommendations',       renderRecommendations);
+register('stammtisch',            renderStammtisch);
 register('dashboard',             renderDashboard);
 register('explore',               renderExplore);
 register('create-community',      renderCreateCommunity);
