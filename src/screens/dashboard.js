@@ -98,11 +98,9 @@ async function loadDashboardData() {
     .eq('user_id', state.user.id)
     .limit(20);
 
-  const seededComms = Object.values(COMMUNITIES);
   const memberComms = (memberRows || []).map(r => r.communities).filter(Boolean);
   const allJoined = [
-    ...seededComms,
-    ...memberComms.filter(c => !COMMUNITIES[c.id]),
+    ...memberComms,
   ];
 
   const commEl = document.getElementById('dash-communities');

@@ -64,6 +64,10 @@ async function initEventDetail(evId) {
     return;
   }
 
+  // Cache event data for calendar export
+  window.__eventCache = window.__eventCache || {};
+  window.__eventCache[ev.id] = ev;
+
   if (rsvpd) {
     body.innerHTML = await renderPrivateChatBody(ev, going, false);
     attachChatHandler(ev.id);
@@ -177,7 +181,7 @@ async function renderPrivateChatBody(ev, going, justRsvpd) {
     </div>
   </div>`}
 
-  <div style="background:var(--bg);border-radius:var(--radius-md);padding:10px 13px;margin-bottom:12px;">
+  <div style="background:var(--bg);border-radius:var(--radius-md);padding:10px 13px;margin-bottom:8px;">
     <div style="display:flex;align-items:flex-start;gap:8px;">
       <i class="ti ti-map-pin" aria-hidden="true" style="font-size:16px;color:var(--accent);flex-shrink:0;margin-top:1px;"></i>
       <div>
@@ -187,6 +191,12 @@ async function renderPrivateChatBody(ev, going, justRsvpd) {
       </div>
     </div>
   </div>
+
+  <button class="btn btn-full mb-md" style="display:flex;align-items:center;justify-content:center;gap:7px;font-size:13px;"
+          onclick="window.kinAddToCalendar('${ev.id}')">
+    <i class="ti ti-calendar-plus" aria-hidden="true" style="font-size:16px;"></i>
+    Add to Apple Calendar
+  </button>
 
   <div id="event-chat-messages-${ev.id}" style="margin-bottom:70px;">
     ${msgHtml || '<p class="text-muted text-small">No messages yet. Be the first to say something!</p>'}
@@ -325,6 +335,40 @@ export function renderCreateEvent(params = {}) {
 }
 
 export function initEventHandlers() {
+  window.kinAddToCalendar = (evId) => {
+    const ev = window.__eventCache?.[evId];
+    if (!ev) return;
+
+    const pad = n => String(n).padStart(2, '0');
+    const dt = new Date(`${ev.event_date}T${ev.event_time || '00:00'}:00`);
+    const end = new Date(dt.getTime() + 2 * 60 * 60 * 1000); // assume 2h
+    const fmt = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Kin//Kin App//EN',
+      'BEGIN:VEVENT',
+      `UID:${ev.id}@kin`,
+      `DTSTAMP:${fmt(new Date())}`,
+      `DTSTART:${fmt(dt)}`,
+      `DTEND:${fmt(end)}`,
+      `SUMMARY:${ev.title}`,
+      `LOCATION:${ev.full_address || ev.district || ''}`,
+      ev.address_note ? `DESCRIPTION:${ev.address_note}` : '',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].filter(Boolean).join('\r\n');
+
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = `${ev.title.replace(/[^a-z0-9]/gi, '-')}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   window.kinRsvp = async (evId) => {
     if (!state.user) { navigate('login'); return; }
 

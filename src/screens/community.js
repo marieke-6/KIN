@@ -133,11 +133,11 @@ async function initCommunityScreen(commId) {
   // Render join/leave button in nav
   const btnWrap = document.getElementById('comm-join-btn-wrap');
   if (btnWrap) {
-    if (isMember || isSeeded) {
+    if (isMember) {
       btnWrap.innerHTML = `<span class="pill pill-sage text-tiny">
         <i class="ti ti-check" aria-hidden="true"></i> Joined
       </span>
-      ${!isCreator && !isSeeded ? `
+      ${!isCreator ? `
         <button class="btn btn-sm" style="margin-left:6px;font-size:12px;color:var(--muted);"
                 onclick="window.kinLeaveCommunity('${commId}')">Leave</button>` : ''}`;
     } else {
@@ -149,10 +149,10 @@ async function initCommunityScreen(commId) {
     }
   }
 
-  // Show chat input only for members; otherwise show a join prompt
+  // Show chat input only for members
   const chatInput = document.querySelector('.chat-input-row');
   if (chatInput) {
-    if (!isMember && !isSeeded) {
+    if (!isMember) {
       chatInput.innerHTML = `
         <div style="flex:1;padding:12px 16px;text-align:center;">
           <p class="text-muted text-small" style="margin-bottom:10px;">Join this community to chat and see events.</p>
