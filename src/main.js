@@ -10,7 +10,7 @@ import { renderCommunity, initCommunityHandlers } from './screens/community.js';
 import { renderEventDetail, renderCreateEvent, renderPastEvent, initEventHandlers } from './screens/events.js';
 import { renderProfile, renderEditProfile, renderPrivacy, renderNotificationSettings, renderDeleteAccount, initProfileHandlers } from './screens/profile.js';
 import { renderReportMember, renderReportMessage, renderReportSent, initReportHandlers } from './screens/reporting.js';
-import { renderRecommendations } from './screens/recommendations.js';
+import { renderRecommendations, renderPostRecommendation, initRecommendationHandlers } from './screens/recommendations.js';
 import { renderStammtisch } from './screens/stammtisch.js';
 import { renderAdminPanel, initAdminHandlers } from './admin/admin.js';
 
@@ -22,6 +22,7 @@ register('interests',             renderInterests);
 register('login',                 renderLogin);
 register('complete-profile',      renderCompleteProfile);
 register('recommendations',       renderRecommendations);
+register('post-recommendation',   renderPostRecommendation);
 register('stammtisch',            renderStammtisch);
 register('dashboard',             renderDashboard);
 register('explore',               renderExplore);
@@ -47,7 +48,7 @@ const SCREEN_TO_NAV = {
   'event-detail': 'dashboard', 'create-event': 'dashboard', 'past-event': 'dashboard',
   'report-member': 'dashboard', 'report-message': 'dashboard', 'report-sent': 'dashboard',
   explore: 'explore', community: 'explore', 'create-community': 'explore',
-  recommendations: 'recommendations',
+  recommendations: 'recommendations', 'post-recommendation': 'recommendations',
   stammtisch: 'stammtisch',
   profile: 'profile', 'edit-profile': 'profile', privacy: 'profile',
   'notification-settings': 'profile', 'delete-account': 'profile', 'complete-profile': 'profile',
@@ -91,6 +92,7 @@ window._kinData = { MEMBERS_BY_CITY };
 
 // ── Init all event handlers ──
 initAuthHandlers();
+initRecommendationHandlers();
 initCommunityHandlers();
 initEventHandlers();
 initProfileHandlers();
