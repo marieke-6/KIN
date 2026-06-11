@@ -1,0 +1,97 @@
+/* ─── Business account colour scheme ───────────────────────────────────────
+   Applied via body.biz class when state.user.isBusiness === true.
+   Swaps the warm-sage palette for a dark-navy + blue palette so it's
+   immediately obvious which mode you're in.
+────────────────────────────────────────────────────────────────────────── */
+
+body.biz {
+  /* Accent: blue instead of sage green */
+  --accent:      #2563eb;
+  --accent-hover:#1d4ed8;
+
+  /* "Sage" tokens reused throughout for selection / active states → blue */
+  --sage:        #dbeafe;   /* blue-100 */
+  --sage-dark:   #1e40af;   /* blue-800 */
+  --sage-bg:     #eff6ff;   /* blue-50  */
+
+  /* Lavender → indigo (keeps contrast) */
+  --lav:         #e0e7ff;
+  --lav-dark:    #3730a3;
+
+  /* Page background → cool slate */
+  --bg:          #f1f5f9;
+  --cream:       #f8fafc;
+
+  /* Text → slightly cooler */
+  --text:        #0f172a;
+  --muted:       #64748b;
+  --border:      rgba(15, 23, 42, 0.10);
+}
+
+/* ── Top nav bar ── */
+body.biz .nav {
+  background: #0f172a;
+  border-bottom-color: rgba(255,255,255,0.07);
+}
+body.biz .nav-logo           { color: #60a5fa; }
+body.biz .nav-back-btn       { color: #94a3b8; }
+body.biz .nav-back > div > p { color: #e2e8f0; }
+body.biz .nav-back .text-tiny,
+body.biz .nav-back .text-muted { color: #94a3b8; }
+body.biz .nav i[class*="ti-bell"] { color: #94a3b8 !important; }
+
+/* ── Tab bar (community screens) ── */
+body.biz .tab-bar {
+  background: #0f172a;
+  border-bottom-color: rgba(255,255,255,0.07);
+}
+body.biz .tab               { color: #64748b; }
+body.biz .tab.active        { color: #60a5fa; border-bottom-color: #60a5fa; }
+body.biz .tab:hover:not(.active) { color: #cbd5e1; }
+
+/* ── Bottom nav (mobile) ── */
+body.biz .bottom-nav {
+  background: #0f172a;
+  border-top-color: rgba(255,255,255,0.07);
+}
+body.biz .bnav-item        { color: #475569; }
+body.biz .bnav-item.active { color: #60a5fa; }
+
+/* ── Desktop sidebar ── */
+@media (min-width: 900px) {
+  body.biz #side-nav {
+    background: #0f172a;
+    border-right-color: rgba(255,255,255,0.06);
+  }
+  body.biz .snav-logo              { color: #60a5fa; }
+  body.biz .snav-item              { color: #94a3b8; }
+  body.biz .snav-item:hover        { background: rgba(255,255,255,0.06); color: #e2e8f0; }
+  body.biz .snav-item.active       { background: #1e3a8a; color: #93c5fd; font-weight: 500; }
+  body.biz .snav-divider           { background: rgba(255,255,255,0.08); }
+  body.biz .snav-user:hover        { background: rgba(255,255,255,0.06); }
+  body.biz .snav-user-name         { color: #e2e8f0; }
+  body.biz .snav-user-city         { color: #64748b; }
+
+  /* App background for business → cool slate */
+  body.biz #app { background: #e2e8f0; }
+}
+
+/* ── Pill overrides ── */
+body.biz .pill-sage  { background: #dbeafe; color: #1e40af; }
+
+/* ── Interest / city chips ── */
+body.biz .interest-chip.selected { background: #dbeafe; color: #1e40af; border-color: #1e40af; }
+body.biz .city-chip.active       { background: #dbeafe; color: #1e40af; border-color: #1e40af; }
+
+/* ── Buttons ── */
+body.biz .btn-primary { background: #2563eb; border-color: #2563eb; }
+body.biz .btn-primary:hover { background: #1d4ed8; }
+
+/* ── Section labels ── */
+body.biz .section-label { color: #64748b; }
+
+/* ── Business mode badge in nav area ── */
+body.biz #snav-user-area .snav-user::after,
+body.biz .nav::after {
+  /* subtle "Business" indicator handled via JS avatar */
+}

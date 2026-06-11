@@ -65,6 +65,7 @@ function updateSideNavUser() {
   const el = document.getElementById('snav-user-area');
   if (!el) return;
   const u = state.user;
+  document.body.classList.toggle('biz', !!u?.isBusiness);
   if (!u) { el.innerHTML = ''; return; }
   const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
   el.innerHTML = `<div class="snav-user" onclick="window.kinNavigate('profile')">
