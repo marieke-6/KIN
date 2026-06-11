@@ -57,15 +57,21 @@ async function loadDashboardData() {
   // Load upcoming events the user has RSVP'd to
   const { data: rsvpRows } = await supabase
     .from('rsvps')
-    .select(`event_id, events(id, title, event_date, event_time, district, community_id, icon, icon_color, cover_url)`)
+    .select(`event_id, events(id, title, event_date, event_time, district, community_id, icon, icon_color, cover_url, chat_expires_at)`)
     .eq('user_id', state.user.id)
     .limit(10);
 
+  const now = new Date();
   const eventsEl = document.getElementById('dash-events');
   if (eventsEl) {
     const upcomingEvents = (rsvpRows || [])
       .map(r => r.events)
-      .filter(e => e && e.event_date >= today)
+      .filter(e => {
+        if (!e) return false;
+        if (e.event_date >= today) return true;
+        // Past but chat still live (within 24 h deletion window)
+        return e.chat_expires_at && new Date(e.chat_expires_at) > now;
+      })
       .sort((a, b) => a.event_date.localeCompare(b.event_date))
       .slice(0, 3);
 
@@ -91,7 +97,10 @@ async function loadDashboardData() {
             <p class="fw-500" style="font-size:14px;">${escapeHtml(ev.title)}</p>
             <p class="text-muted text-small">${day} ${mon} · ${(ev.event_time || '').slice(0,5)} · ${escapeHtml(ev.district)}</p>
           </div>
-          <span class="new-badge">chat open</span>
+          ${ev.event_date < today
+            ? `<span style="font-size:11px;font-weight:500;color:var(--red-dark);background:var(--red-bg);padding:3px 8px;border-radius:20px;white-space:nowrap;">Past event</span>`
+            : `<span class="new-badge">chat open</span>`
+          }
         </div>`;
       }).join('');
     }
@@ -225,6 +234,7 @@ async function loadExploreCommunities(filter = '') {
   const interests = (state.user?.interests || []).map(i => i.toLowerCase());
   if (interests.length > 0 && !filter) {
     const suggested = comms.filter(c => {
+      if (joinedIds.has(c.id)) return false;
       const haystack = `${c.name} ${c.description || ''}`.toLowerCase();
       return interests.some(i => haystack.includes(i));
     });
