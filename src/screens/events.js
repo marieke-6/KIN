@@ -1,13 +1,36 @@
-// ─── Event Detail & Private Chat Screen ───
+// ─── Event Detail & Private Chat Screen ─── v2
 import { state, navigate } from '../utils/state.js';
 import { avatar, escapeHtml, capacityBar, eventDateBlock, businessBadge } from '../utils/helpers.js';
 import { supabase } from '../lib/supabase.js';
+
+const EVENT_ICONS = ['🎲','🏃','🎨','☕','🎵','🍕','🌿','📚','🎯','🎭','🏊','🌍'];
+const EVENT_COLORS = [
+  { name: 'sage',  bg: 'var(--sage)'  },
+  { name: 'lav',   bg: 'var(--lav)'   },
+  { name: 'peach', bg: 'var(--peach)' },
+  { name: 'amber', bg: 'var(--amber)' },
+];
+const EV_BG = { sage:'var(--sage)', lav:'var(--lav)', peach:'var(--peach)', amber:'var(--amber)' };
+
+function evIconHtml(ev, size = 'md') {
+  const dim = size === 'sm' ? 36 : 44;
+  const fs  = size === 'sm' ? 18 : 22;
+  if (ev.cover_url) {
+    return `<div style="width:${dim}px;height:${dim}px;border-radius:10px;overflow:hidden;flex-shrink:0;">
+      <img src="${escapeHtml(ev.cover_url)}" style="width:100%;height:100%;object-fit:cover;" /></div>`;
+  }
+  if (ev.icon) {
+    const bg = EV_BG[ev.icon_color || 'sage'] || 'var(--sage)';
+    return `<div style="width:${dim}px;height:${dim}px;border-radius:10px;background:${bg};display:flex;align-items:center;justify-content:center;font-size:${fs}px;flex-shrink:0;">${ev.icon}</div>`;
+  }
+  return '';
+}
 
 // ── Fetch a single event from Supabase ──
 async function fetchEvent(id) {
   const { data, error } = await supabase
     .from('events')
-    .select(`*, rsvps(count), profiles!events_created_by_fkey(name, is_business, business_type)`)
+    .select(`*, rsvps(count), event_waitlist(count), profiles!events_created_by_fkey(name, is_business, business_type)`)
     .eq('id', id)
     .single();
   if (error) return null;
@@ -19,6 +42,18 @@ async function userHasRsvp(eventId) {
   if (!state.user) return false;
   const { data } = await supabase
     .from('rsvps')
+    .select('id')
+    .eq('event_id', eventId)
+    .eq('user_id', state.user.id)
+    .maybeSingle();
+  return !!data;
+}
+
+// ── Check if current user is on the waitlist ──
+async function userOnWaitlist(eventId) {
+  if (!state.user) return false;
+  const { data } = await supabase
+    .from('event_waitlist')
     .select('id')
     .eq('event_id', eventId)
     .eq('user_id', state.user.id)
@@ -52,7 +87,7 @@ async function initEventDetail(evId) {
   const body = document.getElementById('event-detail-body');
   if (!body) return;
 
-  const [ev, rsvpd] = await Promise.all([fetchEvent(evId), userHasRsvp(evId)]);
+  const [ev, rsvpd, onWaitlist] = await Promise.all([fetchEvent(evId), userHasRsvp(evId), userOnWaitlist(evId)]);
   if (!ev) { body.innerHTML = '<p class="text-muted">Event not found.</p>'; return; }
 
   const going = ev.rsvps?.[0]?.count ?? 0;
@@ -70,14 +105,17 @@ async function initEventDetail(evId) {
 
   if (rsvpd) {
     body.innerHTML = await renderPrivateChatBody(ev, going, false);
+    const channel = subscribeToChat(ev.id);
+    window.__chatCleanup = () => { channel.unsubscribe(); window.__chatCleanup = null; };
     attachChatHandler(ev.id);
   } else {
-    body.innerHTML = renderLockedEventBody(ev, going);
+    body.innerHTML = renderLockedEventBody(ev, going, onWaitlist);
   }
 }
 
 // ── Locked view (not yet RSVP'd) ──
-function renderLockedEventBody(ev, going) {
+function renderLockedEventBody(ev, going, onWaitlist = false) {
+  const waitlistCount = parseInt(ev.event_waitlist?.[0]?.count ?? 0, 10);
   const d   = new Date(ev.event_date + 'T00:00:00');
   const day = d.getDate();
   const mon = d.toLocaleString('en', { month: 'short' }).toUpperCase();
@@ -92,6 +130,7 @@ function renderLockedEventBody(ev, going) {
   </div>
 
   <div class="card mb-lg">
+    ${evIconHtml(ev) ? `<div style="margin-bottom:10px;">${evIconHtml(ev)}</div>` : ''}
     <p class="fw-500 mb-md" style="font-size:15px;">${escapeHtml(ev.title)}</p>
     <div style="display:flex;flex-direction:column;gap:8px;">
       <div style="display:flex;align-items:center;gap:8px;">
@@ -103,6 +142,7 @@ function renderLockedEventBody(ev, going) {
         <div>
           <span style="font-size:13px;">${escapeHtml(ev.district)}</span>
           <span class="pill pill-gray text-tiny" style="margin-left:6px;">Exact address after RSVP</span>
+          <br><a href="https://maps.google.com/?q=${encodeURIComponent((ev.district || '') + (ev.city ? ', ' + ev.city : ''))}" target="_blank" rel="noopener" style="font-size:12px;color:var(--accent);display:inline-flex;align-items:center;gap:3px;margin-top:3px;"><i class="ti ti-map" style="font-size:11px;"></i> View area on map</a>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
@@ -122,7 +162,15 @@ function renderLockedEventBody(ev, going) {
         <span class="text-tiny text-muted">Chat and address deleted 24h after the event</span>
       </div>
       ${going >= ev.max_attendees
-        ? `<button class="btn btn-full" disabled>Event full</button>`
+        ? onWaitlist
+          ? `<button class="btn btn-full" style="display:flex;align-items:center;justify-content:center;gap:7px;" onclick="window.kinLeaveWaitlist('${ev.id}')">
+               <i class="ti ti-clock" aria-hidden="true" style="font-size:15px;color:var(--muted);"></i>
+               On waitlist${waitlistCount > 1 ? ` · ${waitlistCount} waiting` : ''} · Leave
+             </button>`
+          : `<button class="btn btn-primary btn-full" style="display:flex;align-items:center;justify-content:center;gap:7px;" onclick="window.kinJoinWaitlist('${ev.id}')">
+               <i class="ti ti-clock" aria-hidden="true" style="font-size:14px;"></i>
+               Join waitlist${waitlistCount ? ` · ${waitlistCount} waiting` : ''}
+             </button>`
         : `<button class="btn btn-primary btn-full" onclick="window.kinRsvp('${ev.id}')">RSVP — join the group chat</button>`
       }
     </div>
@@ -190,13 +238,26 @@ async function renderPrivateChatBody(ev, going, justRsvpd) {
         ${ev.address_note ? `<p class="text-tiny text-muted mt-sm">${escapeHtml(ev.address_note)}</p>` : ''}
       </div>
     </div>
+    ${ev.full_address ? `
+    <div style="margin-top:10px;border-radius:8px;overflow:hidden;line-height:0;">
+      <iframe
+        src="https://maps.google.com/maps?q=${encodeURIComponent(ev.full_address)}&output=embed&z=15"
+        width="100%" height="170" frameborder="0" scrolling="no" loading="lazy"
+        style="border:none;display:block;"
+      ></iframe>
+    </div>` : ''}
   </div>
 
-  <button class="btn btn-full mb-md" style="display:flex;align-items:center;justify-content:center;gap:7px;font-size:13px;"
-          onclick="window.kinAddToCalendar('${ev.id}')">
-    <i class="ti ti-calendar-plus" aria-hidden="true" style="font-size:16px;"></i>
-    Add to Apple Calendar
-  </button>
+  <div style="display:flex;gap:8px;margin-bottom:var(--space-md);">
+    <button class="btn btn-full" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;"
+            onclick="window.kinAddToCalendar('${ev.id}')">
+      <i class="ti ti-calendar-plus" aria-hidden="true" style="font-size:15px;"></i> Apple Calendar
+    </button>
+    <button class="btn btn-full" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;"
+            onclick="window.kinAddToGoogleCalendar('${ev.id}')">
+      <i class="ti ti-brand-google" aria-hidden="true" style="font-size:15px;"></i> Google Calendar
+    </button>
+  </div>
 
   <div id="event-chat-messages-${ev.id}" style="margin-bottom:70px;">
     ${msgHtml || '<p class="text-muted text-small">No messages yet. Be the first to say something!</p>'}
@@ -213,6 +274,52 @@ async function renderPrivateChatBody(ev, going, justRsvpd) {
 
 function attachChatHandler(evId) {
   // Handler is set globally in initEventHandlers; nothing extra needed here
+}
+
+// ── Subscribe to live incoming messages ──
+function subscribeToChat(evId) {
+  const channel = supabase
+    .channel(`event-chat-${evId}`)
+    .on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'event_messages',
+      filter: `event_id=eq.${evId}`,
+    }, async (payload) => {
+      const msg = payload.new;
+      if (msg.user_id === state.user?.id) return; // already shown optimistically
+
+      const container = document.getElementById(`event-chat-messages-${evId}`);
+      if (!container) { channel.unsubscribe(); return; }
+
+      // Remove "no messages" placeholder if present
+      const placeholder = container.querySelector('p.text-muted');
+      if (placeholder) placeholder.remove();
+
+      // Fetch sender name/colour
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('name, avatar_color')
+        .eq('id', msg.user_id)
+        .maybeSingle();
+
+      const name  = profile?.name  || 'Member';
+      const color = profile?.avatar_color || 'sage';
+      const init  = name[0].toUpperCase();
+
+      const div = document.createElement('div');
+      div.className = 'msg';
+      div.innerHTML = `${avatar(init, color, 'sm')}
+        <div>
+          <div class="msg-name">${escapeHtml(name)}</div>
+          <div class="msg-bubble msg-bubble-in">${escapeHtml(msg.text)}</div>
+        </div>`;
+      container.appendChild(div);
+      div.scrollIntoView({ behavior: 'smooth' });
+    })
+    .subscribe();
+
+  return channel;
 }
 
 // ── Past event (chat closed / expired) ──
@@ -292,6 +399,30 @@ export function renderCreateEvent(params = {}) {
     <div class="screen-body">
       <div id="create-event-error" class="card-danger mb-lg" style="display:none;">
         <p id="create-event-error-msg" style="font-size:13px;color:var(--red-dark);"></p>
+      </div>
+
+      <div class="field">
+        <label class="field-label">Event icon</label>
+        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:8px;">
+          <div id="ev-icon-preview" style="width:56px;height:56px;border-radius:12px;background:var(--sage);display:flex;align-items:center;justify-content:center;font-size:26px;flex-shrink:0;overflow:hidden;">🎲</div>
+          <div style="flex:1;">
+            <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-bottom:8px;">
+              ${EVENT_ICONS.map((e, i) => `<button type="button" data-ev-icon="${e}" onclick="window.kinPickEventIcon('${e}')" style="font-size:20px;padding:5px 0;border:2px solid ${i===0?'var(--accent)':'transparent'};border-radius:6px;background:${i===0?'var(--sage-bg)':'none'};cursor:pointer;line-height:1;">${e}</button>`).join('')}
+            </div>
+            <div style="display:flex;gap:6px;">
+              ${EVENT_COLORS.map((c, i) => `<button type="button" data-ev-color="${c.name}" onclick="window.kinPickEventColor('${c.name}')" style="width:24px;height:24px;border-radius:50%;background:${c.bg};border:2px solid ${i===0?'var(--text)':'transparent'};cursor:pointer;flex-shrink:0;" title="${c.name}"></button>`).join('')}
+            </div>
+          </div>
+        </div>
+        <input type="hidden" id="ev-icon-val" value="🎲" />
+        <input type="hidden" id="ev-icon-color-val" value="sage" />
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input type="file" id="ev-cover-input" accept="image/*" style="display:none;" onchange="window.kinPreviewEventCover(this)" />
+          <button type="button" class="btn" style="font-size:12px;padding:6px 10px;display:flex;align-items:center;gap:5px;" onclick="document.getElementById('ev-cover-input').click()">
+            <i class="ti ti-photo" aria-hidden="true" style="font-size:13px;"></i> Upload photo instead
+          </button>
+          <button type="button" id="ev-cover-clear" style="display:none;font-size:12px;color:var(--muted);background:none;border:none;cursor:pointer;padding:0;" onclick="window.kinClearEventCover()">Remove</button>
+        </div>
       </div>
 
       <div class="field">
@@ -391,6 +522,55 @@ export function initEventHandlers() {
     URL.revokeObjectURL(url);
   };
 
+  window.kinAddToGoogleCalendar = (evId) => {
+    const ev = window.__eventCache?.[evId];
+    if (!ev) { console.warn('[calendar] event not in cache:', evId); return; }
+
+    const pad = n => String(n).padStart(2, '0');
+    const timeParts = (ev.event_time || '00:00').split(':');
+    const hh = pad(parseInt(timeParts[0] || 0, 10));
+    const mm = pad(parseInt(timeParts[1] || 0, 10));
+    const dateParts = ev.event_date.split('-');
+    const yr = dateParts[0], mo = dateParts[1], dy = dateParts[2];
+    const dtStart = `${yr}${mo}${dy}T${hh}${mm}00`;
+    const startMs = new Date(`${yr}-${mo}-${dy}T${hh}:${mm}:00`).getTime();
+    const endD = new Date(startMs + 2 * 60 * 60 * 1000);
+    const dtEnd = `${endD.getFullYear()}${pad(endD.getMonth()+1)}${pad(endD.getDate())}T${pad(endD.getHours())}${pad(endD.getMinutes())}00`;
+
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: ev.title || '',
+      dates: `${dtStart}/${dtEnd}`,
+      details: ev.address_note || '',
+      location: ev.full_address || ev.district || '',
+    });
+    window.open(`https://calendar.google.com/calendar/render?${params.toString()}`, '_blank');
+  };
+
+  window.kinJoinWaitlist = async (evId) => {
+    if (!state.user) { navigate('login'); return; }
+    const btn = document.querySelector(`button[onclick="window.kinJoinWaitlist('${evId}')"]`);
+    if (btn) { btn.disabled = true; btn.textContent = 'Joining waitlist…'; }
+    const { error } = await supabase.from('event_waitlist').insert({
+      event_id: evId,
+      user_id: state.user.id,
+    });
+    if (error) {
+      if (btn) { btn.disabled = false; }
+      return;
+    }
+    navigate('event-detail', { id: evId });
+  };
+
+  window.kinLeaveWaitlist = async (evId) => {
+    if (!state.user) return;
+    await supabase.from('event_waitlist')
+      .delete()
+      .eq('event_id', evId)
+      .eq('user_id', state.user.id);
+    navigate('event-detail', { id: evId });
+  };
+
   window.kinRsvp = async (evId) => {
     if (!state.user) { navigate('login'); return; }
 
@@ -406,6 +586,11 @@ export function initEventHandlers() {
       if (btn) { btn.disabled = false; btn.textContent = 'RSVP — join the group chat'; }
       return;
     }
+
+    // Notify organiser (fire-and-forget — email failure must never block the UX)
+    supabase.functions.invoke('send-email', {
+      body: { action: 'rsvp', event_id: evId, actor_id: state.user.id },
+    }).catch(() => {});
 
     // Reload the event detail to show private chat
     navigate('event-detail', { id: evId });
@@ -437,6 +622,58 @@ export function initEventHandlers() {
     });
   };
 
+  // ── Icon picker handlers ──
+  window.kinPickEventIcon = (emoji) => {
+    const iconVal = document.getElementById('ev-icon-val');
+    if (iconVal) iconVal.value = emoji;
+    window.__evCoverFile = null;
+    document.getElementById('ev-cover-clear')?.style.setProperty('display', 'none');
+    const color = document.getElementById('ev-icon-color-val')?.value || 'sage';
+    const preview = document.getElementById('ev-icon-preview');
+    if (preview) { preview.style.background = EV_BG[color] || 'var(--sage)'; preview.innerHTML = emoji; }
+    document.querySelectorAll('[data-ev-icon]').forEach(b => {
+      b.style.borderColor = b.dataset.evIcon === emoji ? 'var(--accent)' : 'transparent';
+      b.style.background  = b.dataset.evIcon === emoji ? 'var(--sage-bg)' : 'none';
+    });
+  };
+
+  window.kinPickEventColor = (colorName) => {
+    const colorVal = document.getElementById('ev-icon-color-val');
+    if (colorVal) colorVal.value = colorName;
+    const bg = EV_BG[colorName] || 'var(--sage)';
+    const preview = document.getElementById('ev-icon-preview');
+    if (preview && !window.__evCoverFile) preview.style.background = bg;
+    document.querySelectorAll('[data-ev-color]').forEach(b => {
+      b.style.borderColor = b.dataset.evColor === colorName ? 'var(--text)' : 'transparent';
+    });
+  };
+
+  window.kinPreviewEventCover = (input) => {
+    const file = input.files?.[0];
+    if (!file) return;
+    window.__evCoverFile = file;
+    const preview = document.getElementById('ev-icon-preview');
+    if (preview) {
+      const url = URL.createObjectURL(file);
+      preview.style.background = 'transparent';
+      preview.innerHTML = `<img src="${url}" style="width:100%;height:100%;object-fit:cover;" />`;
+    }
+    const clearBtn = document.getElementById('ev-cover-clear');
+    if (clearBtn) clearBtn.style.display = '';
+  };
+
+  window.kinClearEventCover = () => {
+    window.__evCoverFile = null;
+    const inp = document.getElementById('ev-cover-input');
+    if (inp) inp.value = '';
+    const clearBtn = document.getElementById('ev-cover-clear');
+    if (clearBtn) clearBtn.style.display = 'none';
+    const emoji = document.getElementById('ev-icon-val')?.value || '🎲';
+    const color = document.getElementById('ev-icon-color-val')?.value || 'sage';
+    const preview = document.getElementById('ev-icon-preview');
+    if (preview) { preview.style.background = EV_BG[color] || 'var(--sage)'; preview.innerHTML = emoji; }
+  };
+
   window.kinCreateEvent = async (commId) => {
     const title    = document.getElementById('ev-title')?.value.trim();
     const date     = document.getElementById('ev-date')?.value;
@@ -445,6 +682,8 @@ export function initEventHandlers() {
     const district = document.getElementById('ev-district')?.value.trim();
     const address  = document.getElementById('ev-address')?.value.trim();
     const note     = document.getElementById('ev-note')?.value.trim() || '';
+    const icon       = document.getElementById('ev-icon-val')?.value || '🎲';
+    const icon_color = document.getElementById('ev-icon-color-val')?.value || 'sage';
 
     const errEl  = document.getElementById('create-event-error');
     const errMsg = document.getElementById('create-event-error-msg');
@@ -462,6 +701,19 @@ export function initEventHandlers() {
     const btn = document.getElementById('create-event-btn');
     if (btn) { btn.disabled = true; btn.textContent = 'Creating…'; }
 
+    // Upload cover photo if provided
+    let cover_url = null;
+    if (window.__evCoverFile) {
+      const file = window.__evCoverFile;
+      const ext  = (file.name.split('.').pop() || 'jpg').toLowerCase();
+      const path = `events/${state.user.id}/${Date.now()}.${ext}`;
+      const { data: up } = await supabase.storage.from('recommendations').upload(path, file, { upsert: true });
+      if (up) {
+        const { data: urlData } = supabase.storage.from('recommendations').getPublicUrl(path);
+        cover_url = urlData?.publicUrl || null;
+      }
+    }
+
     // chat_expires_at = event date + event time + 24h
     const eventDatetime = new Date(`${date}T${time}:00`);
     const chatExpiresAt = new Date(eventDatetime.getTime() + 24 * 60 * 60 * 1000).toISOString();
@@ -478,6 +730,9 @@ export function initEventHandlers() {
       address_note:   note,
       created_by:     state.user.id,
       chat_expires_at: chatExpiresAt,
+      icon,
+      icon_color,
+      cover_url,
     });
 
     if (error) {
@@ -486,6 +741,7 @@ export function initEventHandlers() {
       return;
     }
 
+    window.__evCoverFile = null;
     navigate('community', { id: commId });
   };
 }

@@ -79,6 +79,7 @@ function updateSideNavUser() {
 
 // ── Global navigation ──
 window.kinNavigate = (screen, params) => {
+  window.__chatCleanup?.(); // unsubscribe any active chat realtime channel
   navigate(screen, params ? (typeof params === 'string' ? { id: params } : params) : {});
   syncSideNav(screen);
   updateSideNavUser();

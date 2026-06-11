@@ -57,7 +57,7 @@ async function loadDashboardData() {
   // Load upcoming events the user has RSVP'd to
   const { data: rsvpRows } = await supabase
     .from('rsvps')
-    .select(`event_id, events(id, title, event_date, event_time, district, community_id)`)
+    .select(`event_id, events(id, title, event_date, event_time, district, community_id, icon, icon_color, cover_url)`)
     .eq('user_id', state.user.id)
     .limit(10);
 
@@ -77,10 +77,16 @@ async function loadDashboardData() {
         const day = d.getDate();
         const mon = d.toLocaleString('en', { month: 'short' }).toUpperCase();
         const comm = COMMUNITIES[ev.community_id];
+        const evBg = { sage:'var(--sage)', lav:'var(--lav)', peach:'var(--peach)', amber:'var(--amber)' };
+        const iconEl = ev.cover_url
+          ? `<div class="comm-icon comm-icon-md" style="overflow:hidden;"><img src="${escapeHtml(ev.cover_url)}" style="width:100%;height:100%;object-fit:cover;border-radius:var(--radius-md);" /></div>`
+          : ev.icon
+            ? `<div class="comm-icon comm-icon-md" style="background:${evBg[ev.icon_color||'sage']||'var(--sage)'};display:flex;align-items:center;justify-content:center;font-size:22px;">${ev.icon}</div>`
+            : comm ? commIcon(comm.icon, comm.color, 'md') : `<div class="comm-icon comm-icon-md" style="background:var(--sage);"></div>`;
         return `
         <div class="card card-clickable mb-md" onclick="window.kinNavigate('event-detail',{id:'${ev.id}'})"
              style="display:flex;align-items:center;gap:12px;">
-          ${comm ? commIcon(comm.icon, comm.color, 'md') : `<div class="comm-icon comm-icon-md" style="background:var(--sage);"></div>`}
+          ${iconEl}
           <div style="flex:1;min-width:0;">
             <p class="fw-500" style="font-size:14px;">${escapeHtml(ev.title)}</p>
             <p class="text-muted text-small">${day} ${mon} · ${(ev.event_time || '').slice(0,5)} · ${escapeHtml(ev.district)}</p>
@@ -149,6 +155,11 @@ export function renderExplore() {
              oninput="window.kinSearchCommunities()"
              style="margin-bottom:var(--space-lg);" />
 
+      <div id="explore-suggested-wrap" style="display:none;">
+        <div class="section-label">Suggested for you</div>
+        <div id="explore-suggested"></div>
+      </div>
+
       <div class="section-label">Communities near you</div>
       <div id="explore-list">
         <p class="text-muted text-small">Loading…</p>
@@ -190,7 +201,7 @@ async function loadExploreCommunities(filter = '') {
     return;
   }
 
-  el.innerHTML = comms.map(c => {
+  const renderCommCard = (c) => {
     const isJoined = joinedIds.has(c.id);
     const members  = c.community_members?.[0]?.count ?? 0;
     const cityLabel = c.is_seeded ? city : (c.city || city);
@@ -208,7 +219,24 @@ async function loadExploreCommunities(filter = '') {
         : `<button class="btn btn-primary btn-sm" onclick="event.stopPropagation();window.kinJoinCommunity('${c.id}',this)">Join</button>`
       }
     </div>`;
-  }).join('');
+  };
+
+  // Interest-based suggestions
+  const interests = (state.user?.interests || []).map(i => i.toLowerCase());
+  if (interests.length > 0 && !filter) {
+    const suggested = comms.filter(c => {
+      const haystack = `${c.name} ${c.description || ''}`.toLowerCase();
+      return interests.some(i => haystack.includes(i));
+    });
+    const wrap = document.getElementById('explore-suggested-wrap');
+    const sugEl = document.getElementById('explore-suggested');
+    if (wrap && sugEl && suggested.length > 0) {
+      wrap.style.display = '';
+      sugEl.innerHTML = suggested.map(renderCommCard).join('');
+    }
+  }
+
+  el.innerHTML = comms.map(renderCommCard).join('');
 }
 
 export function renderNotifications() {
