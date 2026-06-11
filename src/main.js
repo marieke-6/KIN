@@ -41,9 +41,45 @@ register('report-message',        (p) => renderReportMessage(p));
 register('report-sent',           renderReportSent);
 register('admin',                 () => renderAdminPanel());
 
+// ── Sidebar helpers ──
+const SCREEN_TO_NAV = {
+  dashboard: 'dashboard', notifications: 'dashboard',
+  'event-detail': 'dashboard', 'create-event': 'dashboard', 'past-event': 'dashboard',
+  'report-member': 'dashboard', 'report-message': 'dashboard', 'report-sent': 'dashboard',
+  explore: 'explore', community: 'explore', 'create-community': 'explore',
+  recommendations: 'recommendations',
+  stammtisch: 'stammtisch',
+  profile: 'profile', 'edit-profile': 'profile', privacy: 'profile',
+  'notification-settings': 'profile', 'delete-account': 'profile', 'complete-profile': 'profile',
+};
+
+function syncSideNav(screen) {
+  const group = SCREEN_TO_NAV[screen] || screen;
+  document.querySelectorAll('#side-nav .snav-item').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.screen === group);
+  });
+}
+
+function updateSideNavUser() {
+  const el = document.getElementById('snav-user-area');
+  if (!el) return;
+  const u = state.user;
+  if (!u) { el.innerHTML = ''; return; }
+  const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  el.innerHTML = `<div class="snav-user" onclick="window.kinNavigate('profile')">
+    <div class="avatar avatar-sm avatar-${u.avatarColor||'sage'}">${esc(u.initials||'?')}</div>
+    <div>
+      <div class="snav-user-name">${esc(u.name)}</div>
+      <div class="snav-user-city">${esc(u.city)}</div>
+    </div>
+  </div>`;
+}
+
 // ── Global navigation ──
 window.kinNavigate = (screen, params) => {
   navigate(screen, params ? (typeof params === 'string' ? { id: params } : params) : {});
+  syncSideNav(screen);
+  updateSideNavUser();
   if (screen === 'admin') {
     initAdminHandlers();
     window.kinAdminNav('queue');
@@ -67,7 +103,8 @@ initCreateCommunityHandlers();
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_OUT') {
     state.user = null;
-    navigate('landing');
+    updateSideNavUser();
+    window.kinNavigate('landing');
   }
 });
 
@@ -76,14 +113,14 @@ const isAdmin = window.location.search.includes('admin') || window.location.path
 if (isAdmin) {
   navigate('admin');
 } else {
-  // Check for existing session before showing landing
   loadSession(supabase).then(user => {
+    updateSideNavUser();
     if (user === 'needs-profile') {
-      navigate('complete-profile');
+      window.kinNavigate('complete-profile');
     } else if (user) {
-      navigate('dashboard');
+      window.kinNavigate('dashboard');
     } else {
-      navigate('landing');
+      window.kinNavigate('landing');
     }
   });
 }

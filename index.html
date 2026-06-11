@@ -7,9 +7,32 @@
   <link rel="stylesheet" href="src/styles/tokens.css" />
   <link rel="stylesheet" href="src/styles/base.css" />
   <link rel="stylesheet" href="src/styles/components.css" />
+  <link rel="stylesheet" href="src/styles/responsive.css" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
 </head>
 <body>
+  <aside id="side-nav">
+    <div class="snav-logo">Kin</div>
+    <div class="snav-list">
+      <button class="snav-item" data-screen="dashboard" onclick="window.kinNavigate('dashboard')">
+        <i class="ti ti-home"></i><span>Home</span>
+      </button>
+      <button class="snav-item" data-screen="explore" onclick="window.kinNavigate('explore')">
+        <i class="ti ti-compass"></i><span>Explore</span>
+      </button>
+      <button class="snav-item" data-screen="recommendations" onclick="window.kinNavigate('recommendations')">
+        <i class="ti ti-star"></i><span>Tips</span>
+      </button>
+      <button class="snav-item" data-screen="stammtisch" onclick="window.kinNavigate('stammtisch')">
+        <i class="ti ti-beer"></i><span>Stammtisch</span>
+      </button>
+      <button class="snav-item" data-screen="profile" onclick="window.kinNavigate('profile')">
+        <i class="ti ti-user"></i><span>Profile</span>
+      </button>
+    </div>
+    <div class="snav-divider"></div>
+    <div id="snav-user-area"></div>
+  </aside>
   <div id="app"></div>
   <script>
     window.onerror = function(msg, src, line, col, err) {

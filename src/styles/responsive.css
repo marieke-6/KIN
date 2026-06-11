@@ -1,0 +1,126 @@
+/* ─── Kin — Desktop / Responsive Layout ─── */
+
+/* Side nav: hidden on mobile */
+#side-nav {
+  display: none;
+}
+
+@media (min-width: 900px) {
+
+  /* ── App shell: sidebar + scrollable content ── */
+  body {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+    background: var(--bg);
+  }
+
+  /* ── Side Nav ── */
+  #side-nav {
+    display: flex;
+    flex-direction: column;
+    width: 220px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 0.5px solid var(--border);
+    padding: 20px 10px;
+    height: 100vh;
+    overflow-y: auto;
+  }
+
+  .snav-logo {
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--accent);
+    letter-spacing: -0.3px;
+    padding: 6px 12px 24px;
+    flex-shrink: 0;
+  }
+
+  .snav-list {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .snav-item {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 14px;
+    font-family: var(--font-sans);
+    color: var(--muted);
+    width: 100%;
+    text-align: left;
+    transition: all var(--transition);
+  }
+  .snav-item i { font-size: 19px; line-height: 1; }
+  .snav-item:hover  { background: var(--bg); color: var(--text); }
+  .snav-item.active { background: var(--sage); color: var(--sage-dark); font-weight: 500; }
+
+  .snav-divider {
+    height: 0.5px;
+    background: var(--border);
+    margin: 8px 4px;
+    flex-shrink: 0;
+  }
+
+  .snav-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: background var(--transition);
+  }
+  .snav-user:hover { background: var(--bg); }
+  .snav-user-name { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.3; }
+  .snav-user-city { font-size: 11px; color: var(--muted); }
+
+  /* ── App Container ── */
+  #app {
+    flex: 1;
+    max-width: none;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    background: var(--bg);
+  }
+
+  /* Content pane: white card centered in app */
+  #app > main {
+    max-width: 680px;
+    margin: 0 auto;
+    background: var(--surface);
+    min-height: 100%;
+    box-shadow: 1px 0 0 var(--border), -1px 0 0 var(--border);
+  }
+
+  /* Admin panel takes full width */
+  #app > main.admin-wrap {
+    max-width: none;
+    box-shadow: none;
+  }
+
+  /* ── Hide bottom nav ── */
+  .bottom-nav {
+    display: none !important;
+  }
+
+  /* Screen body: remove bottom-nav clearance */
+  .screen-body {
+    padding-bottom: 32px;
+  }
+
+  /* Chat input: no bottom nav to float above */
+  .chat-input-row {
+    bottom: 0;
+  }
+}
