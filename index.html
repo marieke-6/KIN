@@ -44,6 +44,43 @@
     <div id="snav-user-area"></div>
   </aside>
   <div id="app"></div>
+
+  <!-- iOS "Add to Home Screen" install hint -->
+  <div id="pwa-ios-hint" style="display:none;position:fixed;bottom:28px;left:16px;right:16px;z-index:9999;
+       background:#1c1c1e;color:#f5f5f5;border-radius:14px;padding:16px 18px 18px;
+       font-family:-apple-system,'Helvetica Neue',sans-serif;font-size:14px;line-height:1.5;
+       box-shadow:0 8px 32px rgba(0,0,0,0.45);">
+    <button onclick="document.getElementById('pwa-ios-hint').style.display='none';localStorage.setItem('kin-ios-hint','1')"
+            style="position:absolute;top:10px;right:14px;background:none;border:none;color:#8e8e93;
+                   font-size:20px;line-height:1;cursor:pointer;padding:2px 4px;">×</button>
+    <p style="margin:0 24px 6px 0;font-weight:600;font-size:15px;">Install Kin on your iPhone</p>
+    <p style="margin:0;color:#ebebf5cc;font-size:13px;">
+      Tap
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0a84ff" stroke-width="2.2"
+           stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-3px;margin:0 2px;">
+        <path d="M12 3v13"/><path d="m8 7 4-4 4 4"/><rect x="3" y="13" width="18" height="8" rx="2"/>
+      </svg>
+      <strong style="color:#f5f5f5;">Share</strong> at the bottom of Safari, then tap
+      <strong style="color:#f5f5f5;">Add to Home Screen</strong>
+    </p>
+    <!-- small arrow pointing down toward Safari toolbar -->
+    <div style="position:absolute;bottom:-8px;left:50%;transform:translateX(-50%);
+                width:0;height:0;border-left:9px solid transparent;border-right:9px solid transparent;
+                border-top:9px solid #1c1c1e;"></div>
+  </div>
+  <script>
+    (function() {
+      var isIOS = /ipad|iphone|ipod/i.test(navigator.userAgent) && !('MSStream' in window);
+      var isStandalone = window.navigator.standalone;
+      var dismissed = localStorage.getItem('kin-ios-hint');
+      if (isIOS && !isStandalone && !dismissed) {
+        setTimeout(function() {
+          var el = document.getElementById('pwa-ios-hint');
+          if (el) el.style.display = 'block';
+        }, 4000);
+      }
+    })();
+  </script>
   <script>
     window.onerror = function(msg, src, line, col, err) {
       console.error('[onerror]', msg, src, line, col, err);
