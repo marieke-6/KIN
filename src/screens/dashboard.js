@@ -50,7 +50,7 @@ export function renderDashboard() {
 }
 
 async function loadDashboardData() {
-  if (!state.user) return;
+  if (!state.user) { window.kinNavigate('landing'); return; }
   const city = state.user.city || 'Vienna';
   const today = new Date().toISOString().split('T')[0];
 
