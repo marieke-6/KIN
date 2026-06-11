@@ -91,22 +91,15 @@
     height: 100vh;
     overflow-y: auto;
     overflow-x: hidden;
-    background: var(--bg);
+    background: var(--surface);
   }
 
-  /* Content pane: white card centered in app */
+  /* Content fills full panel width */
   #app > main {
-    max-width: 680px;
-    margin: 0 auto;
+    max-width: none;
+    margin: 0;
     background: var(--surface);
     min-height: 100%;
-    box-shadow: 1px 0 0 var(--border), -1px 0 0 var(--border);
-  }
-
-  /* Admin panel takes full width */
-  #app > main.admin-wrap {
-    max-width: none;
-    box-shadow: none;
   }
 
   /* ── Hide bottom nav ── */
