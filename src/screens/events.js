@@ -337,36 +337,57 @@ export function renderCreateEvent(params = {}) {
 export function initEventHandlers() {
   window.kinAddToCalendar = (evId) => {
     const ev = window.__eventCache?.[evId];
-    if (!ev) return;
+    if (!ev) { console.warn('[calendar] event not in cache:', evId); return; }
 
     const pad = n => String(n).padStart(2, '0');
-    const timeStr = (ev.event_time || '00:00').slice(0, 5); // HH:MM only
-    const dt = new Date(`${ev.event_date}T${timeStr}:00`);
-    const end = new Date(dt.getTime() + 2 * 60 * 60 * 1000); // assume 2h
-    const fmt = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+    // event_time may be "HH:MM" or "HH:MM:SS" — normalise to HH:MM
+    const timeParts = (ev.event_time || '00:00').split(':');
+    const hh = pad(parseInt(timeParts[0] || 0, 10));
+    const mm = pad(parseInt(timeParts[1] || 0, 10));
 
-    const ics = [
+    const dateParts = ev.event_date.split('-');
+    const yr = dateParts[0], mo = dateParts[1], dy = dateParts[2];
+
+    const dtStart = `${yr}${mo}${dy}T${hh}${mm}00`;
+    // end = start + 2h
+    const startMs = new Date(`${yr}-${mo}-${dy}T${hh}:${mm}:00`).getTime();
+    const endD    = new Date(startMs + 2 * 60 * 60 * 1000);
+    const dtEnd   = `${endD.getFullYear()}${pad(endD.getMonth()+1)}${pad(endD.getDate())}T${pad(endD.getHours())}${pad(endD.getMinutes())}00`;
+
+    const now = new Date();
+    const dtStamp = `${now.getUTCFullYear()}${pad(now.getUTCMonth()+1)}${pad(now.getUTCDate())}T${pad(now.getUTCHours())}${pad(now.getUTCMinutes())}${pad(now.getUTCSeconds())}Z`;
+
+    // Escape ICS text fields
+    const esc = s => (s || '').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n');
+
+    const lines = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
+      'CALSCALE:GREGORIAN',
       'PRODID:-//Kin//Kin App//EN',
       'BEGIN:VEVENT',
-      `UID:${ev.id}@kin`,
-      `DTSTAMP:${fmt(new Date())}`,
-      `DTSTART:${fmt(dt)}`,
-      `DTEND:${fmt(end)}`,
-      `SUMMARY:${ev.title}`,
-      `LOCATION:${ev.full_address || ev.district || ''}`,
-      ev.address_note ? `DESCRIPTION:${ev.address_note}` : '',
+      `UID:${ev.id}@kin-app`,
+      `DTSTAMP:${dtStamp}`,
+      `DTSTART:${dtStart}`,
+      `DTEND:${dtEnd}`,
+      `SUMMARY:${esc(ev.title)}`,
+      `LOCATION:${esc(ev.full_address || ev.district || '')}`,
+      ev.address_note ? `DESCRIPTION:${esc(ev.address_note)}` : null,
       'END:VEVENT',
       'END:VCALENDAR',
-    ].filter(Boolean).join('\r\n');
+    ].filter(Boolean);
 
+    console.log('[calendar] ICS preview:', lines.slice(0,8).join(' | '));
+
+    const ics  = lines.join('\r\n') + '\r\n';
     const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href     = url;
-    a.download = `${ev.title.replace(/[^a-z0-9]/gi, '-')}.ics`;
+    a.download = `${(ev.title || 'event').replace(/[^a-z0-9]/gi, '-')}.ics`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
