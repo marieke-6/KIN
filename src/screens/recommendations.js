@@ -78,7 +78,7 @@ async function loadRecommendations() {
 
   const { data: posts, error } = await supabase
     .from('recommendations')
-    .select('*, profiles(name, is_business, business_name, business_type)')
+    .select('*, profiles(name, is_business, business_name, business_type, avatar_color)')
     .eq('city', city)
     .order('created_at', { ascending: false })
     .limit(30);
@@ -109,14 +109,31 @@ async function loadRecommendations() {
 
 function renderRecCard(p) {
   const isBusiness = p.profiles?.is_business;
-  const author = isBusiness ? (p.business_name || p.profiles?.business_name || p.profiles?.name || 'Business')
-                             : (p.profiles?.name || 'Member');
-  const badge = isBusiness ? `Business · ${escapeHtml(p.profiles?.business_type || 'Partner')}`
-                            : 'Community tip';
-  const badgeClass = isBusiness ? 'pill-amber' : 'pill-sage';
-  const icon = isBusiness ? 'ti-building-store' : 'ti-map-pin';
-  const iconBg = isBusiness ? '#fef3c7' : 'var(--sage)';
-  const iconFg = isBusiness ? '#92400e' : 'var(--sage-dark)';
+  const businessName = p.business_name || p.profiles?.business_name || p.profiles?.name || 'Business';
+  const businessType = p.profiles?.business_type || 'Partner';
+
+  // Badge in header: show business name (or "Community tip" for members)
+  const headerBadge = isBusiness ? escapeHtml(businessName) : 'Community tip';
+  const badgeClass  = isBusiness ? 'pill-amber' : 'pill-sage';
+
+  // Bottom author line: show type info for businesses, name for members
+  const footerLine  = isBusiness
+    ? `Business · ${escapeHtml(businessType)}`
+    : escapeHtml(p.profiles?.name || 'Member');
+
+  const typeLabel = { event:'Event', offer:'Offer', tip:'Tip', place:'Place' }[p.type] || 'Tip';
+
+  // Icon: uploaded logo > default store/pin icon
+  const iconEl = p.logo_url
+    ? `<img src="${escapeHtml(p.logo_url)}" alt="${escapeHtml(businessName)} logo"
+            style="width:36px;height:36px;border-radius:10px;object-fit:cover;flex-shrink:0;">`
+    : isBusiness
+      ? `<div style="width:36px;height:36px;border-radius:10px;background:#fef3c7;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+           <i class="ti ti-building-store" style="font-size:18px;color:#92400e;"></i>
+         </div>`
+      : `<div style="width:36px;height:36px;border-radius:10px;background:var(--sage);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+           <i class="ti ti-map-pin" style="font-size:18px;color:var(--sage-dark);"></i>
+         </div>`;
 
   const dateStr = p.event_date
     ? `<span style="margin-right:8px;"><i class="ti ti-calendar-event" style="font-size:12px;"></i> ${formatDate(p.event_date)}${p.event_time ? ' · ' + p.event_time.slice(0,5) : ''}</span>`
@@ -125,19 +142,15 @@ function renderRecCard(p) {
     ? `<span><i class="ti ti-map-pin" style="font-size:12px;"></i> ${escapeHtml(p.location)}</span>`
     : '';
 
-  const typeLabel = { event:'Event', offer:'Offer', tip:'Tip', place:'Place' }[p.type] || 'Tip';
-
   return `
   <div class="card mb-md" style="display:flex;flex-direction:column;gap:6px;">
     ${p.image_url ? `<img src="${escapeHtml(p.image_url)}" alt="" style="width:100%;height:180px;object-fit:cover;border-radius:8px;margin-bottom:4px;">` : ''}
     <div style="display:flex;align-items:center;gap:8px;">
-      <div style="width:36px;height:36px;border-radius:10px;background:${iconBg};display:flex;align-items:center;justify-content:center;flex-shrink:0;">
-        <i class="ti ${icon}" style="font-size:18px;color:${iconFg};"></i>
-      </div>
+      ${iconEl}
       <div style="flex:1;min-width:0;">
         <p class="fw-500" style="font-size:14px;">${escapeHtml(p.title)}</p>
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span class="pill ${badgeClass}" style="font-size:10px;padding:2px 7px;">${badge}</span>
+          <span class="pill ${badgeClass}" style="font-size:10px;padding:2px 7px;">${headerBadge}</span>
           <span class="pill pill-gray" style="font-size:10px;padding:2px 7px;">${typeLabel}</span>
         </div>
       </div>
@@ -145,7 +158,7 @@ function renderRecCard(p) {
     ${p.description ? `<p style="font-size:13px;line-height:1.5;">${escapeHtml(p.description)}</p>` : ''}
     ${(dateStr || locStr) ? `<p class="text-tiny text-muted" style="display:flex;gap:10px;flex-wrap:wrap;">${dateStr}${locStr}</p>` : ''}
     ${p.website ? `<a href="${escapeHtml(p.website)}" target="_blank" rel="noopener" class="text-accent text-tiny" style="text-decoration:none;"><i class="ti ti-external-link" style="font-size:11px;"></i> ${escapeHtml(p.website.replace(/^https?:\/\//, ''))}</a>` : ''}
-    <p class="text-tiny text-muted">${escapeHtml(author)} · ${timeAgo(p.created_at)}</p>
+    <p class="text-tiny text-muted">${footerLine} · ${timeAgo(p.created_at)}</p>
   </div>`;
 }
 
@@ -210,9 +223,32 @@ export function renderPostRecommendation() {
         </div>
       </div>
 
+      <!-- Logo -->
+      <div class="field">
+        <label class="field-label">Business logo <span class="text-muted">(optional)</span></label>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div id="rec-logo-preview"
+               style="width:56px;height:56px;border-radius:12px;background:var(--bg);
+                      border:1.5px dashed var(--border);display:flex;align-items:center;
+                      justify-content:center;overflow:hidden;cursor:pointer;flex-shrink:0;"
+               onclick="document.getElementById('rec-logo-input').click()">
+            <img id="rec-logo-img" style="display:none;width:100%;height:100%;object-fit:cover;" />
+            <i id="rec-logo-icon" class="ti ti-building-store" style="font-size:22px;color:var(--muted);"></i>
+          </div>
+          <div>
+            <p class="text-small fw-500" style="cursor:pointer;" onclick="document.getElementById('rec-logo-input').click()">
+              <span class="text-accent">Upload logo</span>
+            </p>
+            <p class="text-tiny text-muted">Square image recommended · tap to change</p>
+          </div>
+          <input type="file" id="rec-logo-input" accept="image/*"
+                 style="display:none;" onchange="window.kinRecPreviewLogo(this)">
+        </div>
+      </div>
+
       <!-- Photo -->
       <div class="field">
-        <label class="field-label">Photo</label>
+        <label class="field-label">Photo <span class="text-muted">(optional)</span></label>
         <div id="rec-photo-area">
           <label for="rec-photo-input"
                  style="display:flex;align-items:center;justify-content:center;gap:8px;
@@ -317,6 +353,19 @@ export function initRecommendationHandlers() {
     if (offerRow) offerRow.style.display = type === 'offer' ? 'block' : 'none';
   };
 
+  window.kinRecPreviewLogo = (input) => {
+    const file = input.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img  = document.getElementById('rec-logo-img');
+      const icon = document.getElementById('rec-logo-icon');
+      if (img)  { img.src = e.target.result; img.style.display = 'block'; }
+      if (icon) icon.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  };
+
   window.kinRecPreviewPhoto = (input) => {
     const file = input.files?.[0];
     if (!file) return;
@@ -369,6 +418,22 @@ export function initRecommendationHandlers() {
     // Combine offer details into description if present
     const fullDesc = offer ? `${desc ? desc + '\n\n' : ''}${offer}` : desc;
 
+    // Upload logo if one was selected
+    let logoUrl = null;
+    const logoInput = document.getElementById('rec-logo-input');
+    if (logoInput?.files?.[0]) {
+      const file = logoInput.files[0];
+      const ext  = file.name.split('.').pop().toLowerCase() || 'jpg';
+      const path = `logos/${state.user.id}/${Date.now()}.${ext}`;
+      const { data: upload, error: uploadErr } = await supabase.storage
+        .from('recommendations')
+        .upload(path, file, { contentType: file.type, upsert: true });
+      if (!uploadErr && upload) {
+        const { data: { publicUrl } } = supabase.storage.from('recommendations').getPublicUrl(upload.path);
+        logoUrl = publicUrl;
+      }
+    }
+
     // Upload photo if one was selected
     let imageUrl = null;
     const fileInput = document.getElementById('rec-photo-input');
@@ -397,6 +462,7 @@ export function initRecommendationHandlers() {
       event_date:    date || null,
       event_time:    time || null,
       image_url:     imageUrl,
+      logo_url:      logoUrl,
       business_name: state.user.businessName || '',
       website:       website || null,
     });
